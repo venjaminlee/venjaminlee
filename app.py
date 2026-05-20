@@ -271,7 +271,30 @@ if inventory_file and summary_file and sales_file:
 
     diagnosis["문제원인"] = diagnosis.apply(diagnose_reason, axis=1)
     diagnosis["해석"] = diagnosis["GAP"].apply(gap_text)
+# ======================
+# 필터 영역
+# ======================
 
+st.sidebar.divider()
+st.sidebar.header("분석 필터")
+
+filter_df = diagnosis.copy()
+
+# 카테고리 필터
+if category_col and category_col in diagnosis.columns:
+    category_options = ["전체"] + sorted(diagnosis[category_col].dropna().astype(str).unique().tolist())
+    selected_category = st.sidebar.selectbox("카테고리", category_options)
+
+    if selected_category != "전체":
+        filter_df = filter_df[filter_df[category_col].astype(str) == selected_category]
+
+# 브랜드 필터
+if brand_col and brand_col in diagnosis.columns:
+    brand_options = ["전체"] + sorted(filter_df[brand_col].dropna().astype(str).unique().tolist())
+    selected_brand = st.sidebar.selectbox("브랜드", brand_options)
+
+    if selected_brand != "전체":
+        filter_df = filter_df[filter_df[brand_col].astype(str) == selected_brand]
     # ======================
     # KPI
     # ======================
@@ -279,8 +302,8 @@ if inventory_file and summary_file and sales_file:
     st.subheader("핵심 KPI")
     c1, c2, c3, c4, c5 = st.columns(5)
 
-    risk_count = diagnosis[diagnosis["상태"].astype(str).str.contains("시즌부진|체화위험")].shape[0]
-    action_count = diagnosis[diagnosis["추천액션"].astype(str).str.contains("점출|할인|배분")].shape[0]
+    risk_count = filter_df[filter_df["상태"].astype(str).str.contains("시즌부진|체화위험")].shape[0]
+    action_count = filter_df[filter_df["추천액션"].astype(str).str.contains("점출|할인|배분")].shape[0]
 
     c1.metric("실제 판매율", f"{sell_through:.1f}%")
     c2.metric("총 판매수량", f"{int(total_sales):,}")
@@ -346,7 +369,7 @@ if inventory_file and summary_file and sales_file:
             if col and col in diagnosis.columns and col not in view_cols:
                 view_cols.append(col)
 
-        diag_view = diagnosis.sort_values("GAP").head(15)[view_cols]
+        diag_view = filter_df.sort_values("GAP").head(15)[view_cols]
         st.dataframe(format_number_cols(diag_view), use_container_width=True, height=310)
 
     st.divider()
@@ -499,9 +522,10 @@ if inventory_file and summary_file and sales_file:
                 full_cols.append(col)
 
         st.dataframe(
-            format_number_cols(diagnosis[full_cols].sort_values("GAP")),
-            use_container_width=True,
-            height=420
+        format_number_cols(filter_df[full_cols].sort_values("GAP")),
+        use_container_width=True,
+        height=420
+)
         )
 
 else:
