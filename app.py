@@ -100,7 +100,6 @@ def to_number(series):
 def classify_action(row):
     actual = row["총판매율"]
     expected = row["기대판매율"]
-    gap = row["GAP"]
 
     if row["경과개월"] <= 7:
         if actual < expected * 0.8:
@@ -116,6 +115,29 @@ def classify_action(row):
             return "🟡 잔여재고", "관찰"
         else:
             return "🔵 정상", "유지"
+
+
+def diagnose_reason(row):
+    if row["GAP"] < -10 and row["재고"] > row["판매"] * 2:
+        return "목표 미달 + 재고 과다"
+    elif row["GAP"] < -10:
+        return "목표 대비 판매 부진"
+    elif row["재고"] > row["판매"] * 3:
+        return "재고 과다"
+    elif row["총판매율"] < 30:
+        return "판매 저조"
+    elif row["경과개월"] > 7 and row["총판매율"] < 80:
+        return "시즌 경과 체화 우려"
+    else:
+        return "정상 범위"
+
+
+def gap_text(gap):
+    if gap < 0:
+        return f"목표 대비 {abs(gap):.1f}% 부족"
+    elif gap > 0:
+        return f"목표 대비 {gap:.1f}% 초과"
+    return "목표 수준"
 
 
 def format_number_cols(df):
@@ -245,6 +267,9 @@ if inventory_file and summary_file and sales_file:
         axis=1
     )
 
+    diagnosis["문제원인"] = diagnosis.apply(diagnose_reason, axis=1)
+    diagnosis["해석"] = diagnosis["GAP"].apply(gap_text)
+
     # ======================
     # KPI
     # ======================
@@ -264,14 +289,14 @@ if inventory_file and summary_file and sales_file:
     st.divider()
 
     # ======================
-    # 상단 요약: 카테고리 + 진단
+    # 상단 요약
     # ======================
 
     left, right = st.columns([0.9, 1.1])
 
     with left:
         st.subheader("카테고리별 운영 현황")
-        st.markdown("<div class='small-note'>수량보다 총판매율·구성비 중심으로 확인</div>", unsafe_allow_html=True)
+        st.markdown("<div class='small-note'>총판매율·목표·구성비 중심으로 확인</div>", unsafe_allow_html=True)
 
         if category_col:
             cat = summary.groupby(category_col).agg({
@@ -298,10 +323,24 @@ if inventory_file and summary_file and sales_file:
 
     with right:
         st.subheader("상품 진단 TOP 15")
-        st.markdown("<div class='small-note'>판매율이 아니라 기대판매율 대비 GAP 기준으로 확인</div>", unsafe_allow_html=True)
+        st.markdown("<div class='small-note'>GAP이 낮은 상품부터 우선 점검</div>", unsafe_allow_html=True)
 
         view_cols = []
-        for col in [style_col, style_name_col, category_col, brand_col, "판매", "재고", "총판매율", "기대판매율", "GAP", "상태", "추천액션"]:
+        for col in [
+            style_col,
+            style_name_col,
+            category_col,
+            brand_col,
+            "판매",
+            "재고",
+            "총판매율",
+            "기대판매율",
+            "GAP",
+            "문제원인",
+            "해석",
+            "상태",
+            "추천액션"
+        ]:
             if col and col in diagnosis.columns and col not in view_cols:
                 view_cols.append(col)
 
@@ -437,11 +476,31 @@ if inventory_file and summary_file and sales_file:
 
     with tab3:
         full_cols = []
-        for col in [style_col, style_name_col, category_col, brand_col, season_col, "판매", "재고", "총판매율", "목표판매율", "기대판매율", "GAP", "상태", "추천액션"]:
+        for col in [
+            style_col,
+            style_name_col,
+            category_col,
+            brand_col,
+            season_col,
+            "판매",
+            "재고",
+            "총판매율",
+            "목표판매율",
+            "기대판매율",
+            "GAP",
+            "문제원인",
+            "해석",
+            "상태",
+            "추천액션"
+        ]:
             if col and col in diagnosis.columns and col not in full_cols:
                 full_cols.append(col)
 
-        st.dataframe(format_number_cols(diagnosis[full_cols].sort_values("GAP")), use_container_width=True, height=420)
+        st.dataframe(
+            format_number_cols(diagnosis[full_cols].sort_values("GAP")),
+            use_container_width=True,
+            height=420
+        )
 
 else:
     st.info("좌측에서 재고 파일, 총괄장, 판매리스트 3개 파일을 업로드해주세요.")
