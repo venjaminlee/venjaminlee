@@ -280,21 +280,24 @@ if inventory_file and summary_file and sales_file:
 
     filter_df = diagnosis.copy()
 
+    selected_category = "전체"
+    selected_brand = "전체"
+
     # 카테고리 필터
     if category_col and category_col in diagnosis.columns:
         category_options = ["전체"] + sorted(diagnosis[category_col].dropna().astype(str).unique().tolist())
         selected_category = st.sidebar.selectbox("카테고리", category_options)
 
-    if selected_category != "전체":
-        filter_df = filter_df[filter_df[category_col].astype(str) == selected_category]
+        if selected_category != "전체":
+            filter_df = filter_df[filter_df[category_col].astype(str) == selected_category]
 
     # 브랜드 필터
     if brand_col and brand_col in diagnosis.columns:
         brand_options = ["전체"] + sorted(filter_df[brand_col].dropna().astype(str).unique().tolist())
         selected_brand = st.sidebar.selectbox("브랜드", brand_options)
 
-    if selected_brand != "전체":
-        filter_df = filter_df[filter_df[brand_col].astype(str) == selected_brand]
+        if selected_brand != "전체":
+            filter_df = filter_df[filter_df[brand_col].astype(str) == selected_brand]
     # ======================
     # KPI
     # ======================
