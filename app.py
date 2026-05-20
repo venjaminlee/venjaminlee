@@ -1,41 +1,49 @@
 import streamlit as st
 import pandas as pd
-import altair as alt
 
 st.set_page_config(page_title="TOPS AI PoC", layout="wide")
 
 st.markdown("""
 <style>
 .block-container {
-    padding-top: 1.2rem;
+    padding-top: 1rem;
     padding-bottom: 1rem;
-    max-width: 1200px;
+    max-width: 1180px;
 }
 h1 {
-    font-size: 28px !important;
-    margin-bottom: 0.5rem !important;
+    font-size: 24px !important;
+    margin-bottom: 0.4rem !important;
 }
 h2, h3 {
-    font-size: 20px !important;
-    margin-top: 0.8rem !important;
+    font-size: 17px !important;
+    margin-top: 0.6rem !important;
 }
 div[data-testid="stMetricValue"] {
-    font-size: 24px !important;
+    font-size: 21px !important;
 }
 div[data-testid="stMetricLabel"] {
-    font-size: 13px !important;
-}
-section[data-testid="stSidebar"] {
-    width: 240px !important;
-}
-section[data-testid="stSidebar"] * {
-    font-size: 13px !important;
-}
-.stDataFrame {
     font-size: 12px !important;
 }
+section[data-testid="stSidebar"] {
+    width: 220px !important;
+}
+section[data-testid="stSidebar"] * {
+    font-size: 12px !important;
+}
+.stDataFrame, .stTable {
+    font-size: 11px !important;
+}
+div[data-testid="stDataFrame"] {
+    font-size: 11px !important;
+}
 hr {
-    margin: 1rem 0 !important;
+    margin: 0.8rem 0 !important;
+}
+.small-note {
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: -4px;
+    margin-bottom: 8px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -92,6 +100,7 @@ def to_number(series):
 def classify_action(row):
     actual = row["총판매율"]
     expected = row["기대판매율"]
+    gap = row["GAP"]
 
     if row["경과개월"] <= 7:
         if actual < expected * 0.8:
@@ -107,6 +116,17 @@ def classify_action(row):
             return "🟡 잔여재고", "관찰"
         else:
             return "🔵 정상", "유지"
+
+
+def format_number_cols(df):
+    out = df.copy()
+    for col in out.columns:
+        if pd.api.types.is_numeric_dtype(out[col]):
+            if "율" in col or "비" in col or "GAP" in col:
+                out[col] = out[col].round(1)
+            else:
+                out[col] = out[col].round(0).astype(int)
+    return out
 
 
 if inventory_file and summary_file and sales_file:
@@ -171,25 +191,87 @@ if inventory_file and summary_file and sales_file:
 
     total_sales = summary[sum_sales_col].sum()
     total_stock = summary[sum_stock_col].sum()
+    product_count = summary[style_col].nunique() if style_col else summary.shape[0]
 
     sell_through = (
         total_sales / (total_sales + total_stock) * 100
         if (total_sales + total_stock) > 0 else 0
     )
 
+    category_target = {
+        "잡화": 60,
+        "의류": 60,
+        "슈즈": 50
+    }
+
+    # ======================
+    # 상품 진단 데이터 생성
+    # ======================
+
+    df = summary.copy()
+    df["판매"] = to_number(df[sum_sales_col])
+    df["재고"] = to_number(df[sum_stock_col])
+
+    group_dict = {"판매": "sum", "재고": "sum"}
+
+    if style_name_col:
+        group_dict[style_name_col] = "first"
+    if category_col:
+        group_dict[category_col] = "first"
+    if brand_col:
+        group_dict[brand_col] = "first"
+    if season_col:
+        group_dict[season_col] = "first"
+
+    diagnosis = df.groupby(style_col).agg(group_dict).reset_index()
+
+    diagnosis["총판매율"] = diagnosis.apply(
+        lambda x: x["판매"] / (x["판매"] + x["재고"]) * 100
+        if (x["판매"] + x["재고"]) > 0 else 0,
+        axis=1
+    ).round(1)
+
+    if category_col:
+        diagnosis["목표판매율"] = diagnosis[category_col].map(category_target).fillna(60)
+    else:
+        diagnosis["목표판매율"] = 60
+
+    diagnosis["경과개월"] = 2
+    diagnosis["기대판매율"] = (diagnosis["목표판매율"] * (diagnosis["경과개월"] / 7)).round(1)
+    diagnosis["GAP"] = (diagnosis["총판매율"] - diagnosis["기대판매율"]).round(1)
+
+    diagnosis[["상태", "추천액션"]] = diagnosis.apply(
+        lambda x: pd.Series(classify_action(x)),
+        axis=1
+    )
+
+    # ======================
+    # KPI
+    # ======================
+
     st.subheader("핵심 KPI")
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
+
+    risk_count = diagnosis[diagnosis["상태"].astype(str).str.contains("시즌부진|체화위험")].shape[0]
+    action_count = diagnosis[diagnosis["추천액션"].astype(str).str.contains("점출|할인|배분")].shape[0]
+
     c1.metric("실제 판매율", f"{sell_through:.1f}%")
     c2.metric("총 판매수량", f"{int(total_sales):,}")
     c3.metric("총 재고", f"{int(total_stock):,}")
-    c4.metric("상품 수", f"{summary.shape[0]:,}")
+    c4.metric("상품 수", f"{product_count:,}")
+    c5.metric("조치 필요", f"{action_count:,}")
 
     st.divider()
 
-    left, right = st.columns([1, 1])
+    # ======================
+    # 상단 요약: 카테고리 + 진단
+    # ======================
+
+    left, right = st.columns([0.9, 1.1])
 
     with left:
-        st.subheader("카테고리별 총판매율")
+        st.subheader("카테고리별 운영 현황")
+        st.markdown("<div class='small-note'>수량보다 총판매율·구성비 중심으로 확인</div>", unsafe_allow_html=True)
 
         if category_col:
             cat = summary.groupby(category_col).agg({
@@ -203,70 +285,36 @@ if inventory_file and summary_file and sales_file:
                 axis=1
             ).round(1)
 
+            cat["목표판매율"] = cat[category_col].map(category_target).fillna(60)
             cat["재고구성비"] = (cat[sum_stock_col] / cat[sum_stock_col].sum() * 100).round(1)
             cat["판매구성비"] = (cat[sum_sales_col] / cat[sum_sales_col].sum() * 100).round(1)
+            cat["판단"] = cat.apply(
+                lambda x: "정상" if x["총판매율"] >= x["목표판매율"] else "점검",
+                axis=1
+            )
 
-            st.dataframe(cat, use_container_width=True, height=150)
-
-            chart = alt.Chart(cat).mark_bar().encode(
-                x=alt.X(f"{category_col}:N", title=None),
-                y=alt.Y("총판매율:Q", title="총판매율"),
-                tooltip=[category_col, "총판매율", "재고구성비", "판매구성비"]
-            ).properties(height=180)
-
-            st.altair_chart(chart, use_container_width=True)
+            cat_view = cat[[category_col, "총판매율", "목표판매율", "재고구성비", "판매구성비", "판단"]]
+            st.dataframe(cat_view, use_container_width=True, height=150)
 
     with right:
-        st.subheader("문제 상품 + 액션 추천")
+        st.subheader("상품 진단 TOP 15")
+        st.markdown("<div class='small-note'>판매율이 아니라 기대판매율 대비 GAP 기준으로 확인</div>", unsafe_allow_html=True)
 
-        df = summary.copy()
-        df["판매"] = to_number(df[sum_sales_col])
-        df["재고"] = to_number(df[sum_stock_col])
+        view_cols = []
+        for col in [style_col, style_name_col, category_col, brand_col, "판매", "재고", "총판매율", "기대판매율", "GAP", "상태", "추천액션"]:
+            if col and col in diagnosis.columns and col not in view_cols:
+                view_cols.append(col)
 
-        category_target = {
-            "잡화": 60,
-            "의류": 60,
-            "슈즈": 50
-        }
-
-        group_dict = {"판매": "sum", "재고": "sum"}
-
-        if style_name_col:
-            group_dict[style_name_col] = "first"
-        if category_col:
-            group_dict[category_col] = "first"
-        if brand_col:
-            group_dict[brand_col] = "first"
-        if season_col:
-            group_dict[season_col] = "first"
-
-        agg = df.groupby(style_col).agg(group_dict).reset_index()
-
-        agg["총판매율"] = agg.apply(
-            lambda x: x["판매"] / (x["판매"] + x["재고"]) * 100
-            if (x["판매"] + x["재고"]) > 0 else 0,
-            axis=1
-        ).round(1)
-
-        if category_col:
-            agg["목표판매율"] = agg[category_col].map(category_target).fillna(60)
-        else:
-            agg["목표판매율"] = 60
-
-        agg["경과개월"] = 2
-        agg["기대판매율"] = (agg["목표판매율"] * (agg["경과개월"] / 7)).round(1)
-
-        agg[["상태", "추천액션"]] = agg.apply(
-            lambda x: pd.Series(classify_action(x)),
-            axis=1
-        )
-
-        result = agg.sort_values("총판매율").head(15)
-        st.dataframe(result, use_container_width=True, height=330)
+        diag_view = diagnosis.sort_values("GAP").head(15)[view_cols]
+        st.dataframe(format_number_cols(diag_view), use_container_width=True, height=310)
 
     st.divider()
 
-    tab1, tab2, tab3 = st.tabs(["점출/점입 추천", "창고 출고배분", "상품 분석"])
+    # ======================
+    # 실행 추천 탭
+    # ======================
+
+    tab1, tab2, tab3 = st.tabs(["점출/점입 추천", "창고 출고배분", "상품 전체 진단"])
 
     with tab1:
         if inv_style_col and inv_store_col and sales_style_col and sales_store_col and sales_qty_col:
@@ -388,24 +436,12 @@ if inventory_file and summary_file and sales_file:
             st.info("창고 출고배분을 위해 재고구분, 스타일코드, 점포명, 판매수량 컬럼이 필요합니다.")
 
     with tab3:
-        preferred_cols = [
-            "서브브랜드명",
-            "스타일코드",
-            "스타일명",
-            "색상",
-            "사이즈",
-            "PLU",
-            "현판가",
-            "누계판매수량",
-            "누계총재고수량"
-        ]
+        full_cols = []
+        for col in [style_col, style_name_col, category_col, brand_col, season_col, "판매", "재고", "총판매율", "목표판매율", "기대판매율", "GAP", "상태", "추천액션"]:
+            if col and col in diagnosis.columns and col not in full_cols:
+                full_cols.append(col)
 
-        visible_cols = [c for c in preferred_cols if c in summary.columns]
-
-        if visible_cols:
-            st.dataframe(summary[visible_cols].head(200), use_container_width=True, height=420)
-        else:
-            st.dataframe(summary.head(200), use_container_width=True, height=420)
+        st.dataframe(format_number_cols(diagnosis[full_cols].sort_values("GAP")), use_container_width=True, height=420)
 
 else:
     st.info("좌측에서 재고 파일, 총괄장, 판매리스트 3개 파일을 업로드해주세요.")
