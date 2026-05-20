@@ -11,10 +11,6 @@ summary_file = st.sidebar.file_uploader("총괄장", type=["xlsx"])
 sales_file = st.sidebar.file_uploader("판매리스트", type=["xlsx"])
 
 
-# ======================
-# 유틸 함수
-# ======================
-
 def make_unique_columns(df):
     cols = []
     seen = {}
@@ -54,9 +50,25 @@ def to_number(series):
     )
 
 
-# ======================
-# 실행
-# ======================
+def classify_action(row):
+    actual = row["총판매율"]
+    expected = row["기대판매율"]
+
+    if row["경과개월"] <= 7:
+        if actual < expected * 0.8:
+            return "🔴 시즌부진", "점출/배분 검토"
+        elif actual < expected:
+            return "🟡 주의", "관찰"
+        else:
+            return "🔵 정상", "유지"
+    else:
+        if actual < 80:
+            return "🔴 체화위험", "할인 검토"
+        elif actual < 90:
+            return "🟡 잔여재고", "관찰"
+        else:
+            return "🔵 정상", "유지"
+
 
 if inventory_file and summary_file and sales_file:
 
@@ -74,29 +86,64 @@ if inventory_file and summary_file and sales_file:
     # 컬럼 자동 매핑
     # ======================
 
-    stock_col = find_col(inventory, ["재고", "수량", "현재고"])
-    sales_col = find_col(summary, ["누계판매", "판매수량"])
-    total_stock_col = find_col(summary, ["누계총재고", "현재고"])
-    category_col = find_col(summary, ["아이템", "카테고리"])
+    inv_style_col = find_col(inventory, ["스타일코드"])
+    inv_store_col = find_col(inventory, ["점포명", "매장명", "점포"])
+    inv_stock_col = find_col(inventory, ["현재고수량", "재고수량", "현재고", "재고", "수량"])
+    inv_type_col = find_col(inventory, ["재고구분", "구분"])
+
+    sales_style_col = find_col(sales, ["스타일코드"])
+    sales_store_col = find_col(sales, ["점포명", "매장명", "점포"])
+    sales_qty_col = find_col(sales, ["판매수량", "판매수량_1", "수량"])
+    sales_amt_col = find_col(sales, ["실판매금액", "판매금액", "매출금액", "총판매"])
+
+    sum_sales_col = find_col(summary, ["누계판매수량", "누계판매", "판매수량"])
+    sum_stock_col = find_col(summary, ["누계총재고수량", "누계총재고", "현재고", "재고"])
+    category_col = find_col(summary, ["아이템", "카테고리", "품목"])
     style_col = find_col(summary, ["스타일코드"])
-    style_name_col = find_col(summary, ["스타일명"])
-    brand_col = find_col(summary, ["서브브랜드명"])
+    style_name_col = find_col(summary, ["스타일명", "상품명"])
+    brand_col = find_col(summary, ["서브브랜드명", "브랜드명"])
     season_col = find_col(summary, ["시즌"])
+
+    with st.expander("컬럼 매핑 확인 / 수정", expanded=False):
+        st.write("재고 스타일코드:", inv_style_col)
+        st.write("재고 점포명:", inv_store_col)
+        st.write("재고 수량:", inv_stock_col)
+        st.write("재고 구분:", inv_type_col)
+        st.write("판매 스타일코드:", sales_style_col)
+        st.write("판매 점포명:", sales_store_col)
+        st.write("판매 수량:", sales_qty_col)
+        st.write("판매 금액:", sales_amt_col)
+        st.write("총괄 판매:", sum_sales_col)
+        st.write("총괄 재고:", sum_stock_col)
+        st.write("카테고리:", category_col)
+        st.write("스타일코드:", style_col)
+
+        if inv_stock_col is None:
+            inv_stock_col = st.selectbox("재고 수량 컬럼 선택", inventory.columns)
+        if sum_sales_col is None:
+            sum_sales_col = st.selectbox("총괄 판매 수량 컬럼 선택", summary.columns)
+        if sum_stock_col is None:
+            sum_stock_col = st.selectbox("총괄 재고 수량 컬럼 선택", summary.columns)
 
     # ======================
     # 숫자 변환
     # ======================
 
-    inventory[stock_col] = to_number(inventory[stock_col])
-    summary[sales_col] = to_number(summary[sales_col])
-    summary[total_stock_col] = to_number(summary[total_stock_col])
+    inventory[inv_stock_col] = to_number(inventory[inv_stock_col])
+    summary[sum_sales_col] = to_number(summary[sum_sales_col])
+    summary[sum_stock_col] = to_number(summary[sum_stock_col])
+
+    if sales_qty_col:
+        sales[sales_qty_col] = to_number(sales[sales_qty_col])
+    if sales_amt_col:
+        sales[sales_amt_col] = to_number(sales[sales_amt_col])
 
     # ======================
     # KPI
     # ======================
 
-    total_sales = summary[sales_col].sum()
-    total_stock = summary[total_stock_col].sum()
+    total_sales = summary[sum_sales_col].sum()
+    total_stock = summary[sum_stock_col].sum()
 
     sell_through = (
         total_sales / (total_sales + total_stock) * 100
@@ -106,31 +153,33 @@ if inventory_file and summary_file and sales_file:
     st.subheader("핵심 KPI")
 
     c1, c2, c3, c4 = st.columns(4)
-
     c1.metric("실제 판매율", f"{sell_through:.1f}%")
     c2.metric("총 판매수량", f"{int(total_sales):,}")
     c3.metric("총 재고", f"{int(total_stock):,}")
-    c4.metric("상품 수", f"{summary.shape[0]}")
+    c4.metric("상품 수", f"{summary.shape[0]:,}")
 
     st.divider()
 
     # ======================
-    # 카테고리 총판매율
+    # 카테고리별 총판매율
     # ======================
 
     st.subheader("카테고리별 총판매율")
 
     if category_col:
         cat = summary.groupby(category_col).agg({
-            sales_col: "sum",
-            total_stock_col: "sum"
+            sum_sales_col: "sum",
+            sum_stock_col: "sum"
         }).reset_index()
 
         cat["총판매율"] = cat.apply(
-            lambda x: x[sales_col] / (x[sales_col] + x[total_stock_col]) * 100
-            if (x[sales_col] + x[total_stock_col]) > 0 else 0,
+            lambda x: x[sum_sales_col] / (x[sum_sales_col] + x[sum_stock_col]) * 100
+            if (x[sum_sales_col] + x[sum_stock_col]) > 0 else 0,
             axis=1
         ).round(1)
+
+        cat["재고구성비"] = (cat[sum_stock_col] / cat[sum_stock_col].sum() * 100).round(1)
+        cat["판매구성비"] = (cat[sum_sales_col] / cat[sum_sales_col].sum() * 100).round(1)
 
         st.dataframe(cat, use_container_width=True)
         st.bar_chart(cat.set_index(category_col)["총판매율"])
@@ -138,37 +187,21 @@ if inventory_file and summary_file and sales_file:
     st.divider()
 
     # ======================
-    # 진도율 + 액션 추천
+    # 문제 상품 + 액션 추천
     # ======================
 
     st.subheader("문제 상품 + 액션 추천")
 
     df = summary.copy()
+    df["판매"] = to_number(df[sum_sales_col])
+    df["재고"] = to_number(df[sum_stock_col])
 
-    df["판매"] = summary[sales_col]
-    df["재고"] = summary[total_stock_col]
-
-    # 🔥 기준값 (변경 가능)
     category_target = {
         "잡화": 60,
         "의류": 60,
         "슈즈": 50
     }
 
-    SEASON_TOTAL = 7
-    WARNING_THRESHOLD = 0.8
-    CLEARANCE_THRESHOLD = 80
-
-    # 임시 경과개월 (나중에 자동화)
-    df["경과개월"] = 2
-
-    # 목표 매핑
-    if category_col:
-        df["목표판매율"] = df[category_col].map(category_target).fillna(60)
-    else:
-        df["목표판매율"] = 60
-
-    # 집계
     group_dict = {"판매": "sum", "재고": "sum"}
 
     if style_name_col:
@@ -177,51 +210,168 @@ if inventory_file and summary_file and sales_file:
         group_dict[category_col] = "first"
     if brand_col:
         group_dict[brand_col] = "first"
+    if season_col:
+        group_dict[season_col] = "first"
 
     agg = df.groupby(style_col).agg(group_dict).reset_index()
 
-    # 판매율
     agg["총판매율"] = agg.apply(
         lambda x: x["판매"] / (x["판매"] + x["재고"]) * 100
         if (x["판매"] + x["재고"]) > 0 else 0,
         axis=1
     ).round(1)
 
-    # 기대 판매율
-    agg["목표판매율"] = agg[category_col].map(category_target).fillna(60)
+    if category_col:
+        agg["목표판매율"] = agg[category_col].map(category_target).fillna(60)
+    else:
+        agg["목표판매율"] = 60
+
     agg["경과개월"] = 2
-    agg["기대판매율"] = agg["목표판매율"] * (agg["경과개월"] / SEASON_TOTAL)
+    agg["기대판매율"] = (agg["목표판매율"] * (agg["경과개월"] / 7)).round(1)
 
-    # 상태 + 액션
-    def classify(row):
-        actual = row["총판매율"]
-        expected = row["기대판매율"]
-
-        if row["경과개월"] <= SEASON_TOTAL:
-            if actual < expected * WARNING_THRESHOLD:
-                return "🔴 시즌부진", "점출"
-            elif actual < expected:
-                return "🟡 주의", "관찰"
-            else:
-                return "🔵 정상", "유지"
-        else:
-            if actual < CLEARANCE_THRESHOLD:
-                return "🔴 체화위험", "할인"
-            elif actual < 90:
-                return "🟡 잔여재고", "관찰"
-            else:
-                return "🔵 정상", "유지"
-
-    agg[["상태", "추천액션"]] = agg.apply(lambda x: pd.Series(classify(x)), axis=1)
+    agg[["상태", "추천액션"]] = agg.apply(
+        lambda x: pd.Series(classify_action(x)),
+        axis=1
+    )
 
     result = agg.sort_values("총판매율").head(20)
-
     st.dataframe(result, use_container_width=True)
 
     st.divider()
 
     # ======================
-    # 상품 테이블
+    # 점출 / 점입 추천
+    # ======================
+
+    st.subheader("점출 / 점입 추천")
+
+    if inv_style_col and inv_store_col and sales_style_col and sales_store_col and sales_qty_col:
+
+        store_stock = inventory.copy()
+        store_sales = sales.copy()
+
+        if inv_type_col:
+            store_stock_only = store_stock[~store_stock[inv_type_col].astype(str).str.contains("창고", na=False)].copy()
+        else:
+            store_stock_only = store_stock.copy()
+
+        stock_by_store = store_stock_only.groupby(
+            [inv_style_col, inv_store_col]
+        )[inv_stock_col].sum().reset_index()
+
+        sales_by_store = store_sales.groupby(
+            [sales_style_col, sales_store_col]
+        )[sales_qty_col].sum().reset_index()
+
+        stock_by_store.columns = ["스타일코드", "점포명", "재고"]
+        sales_by_store.columns = ["스타일코드", "점포명", "최근3개월판매"]
+
+        store_perf = pd.merge(
+            stock_by_store,
+            sales_by_store,
+            on=["스타일코드", "점포명"],
+            how="left"
+        )
+
+        store_perf["최근3개월판매"] = store_perf["최근3개월판매"].fillna(0)
+
+        recommendations = []
+
+        for style in store_perf["스타일코드"].unique():
+            temp = store_perf[store_perf["스타일코드"] == style].copy()
+
+            if len(temp) < 2:
+                continue
+
+            source = temp.sort_values(["재고", "최근3개월판매"], ascending=[False, True]).iloc[0]
+            dest = temp.sort_values(["최근3개월판매", "재고"], ascending=[False, True]).iloc[0]
+
+            if source["점포명"] == dest["점포명"]:
+                continue
+
+            if source["재고"] >= 5 and dest["최근3개월판매"] > source["최근3개월판매"]:
+                qty = min(int(source["재고"] - 3), 5)
+
+                if qty > 0:
+                    recommendations.append({
+                        "스타일코드": style,
+                        "출발점포": source["점포명"],
+                        "도착점포": dest["점포명"],
+                        "추천수량": qty,
+                        "출발점포재고": int(source["재고"]),
+                        "출발점포3개월판매": int(source["최근3개월판매"]),
+                        "도착점포재고": int(dest["재고"]),
+                        "도착점포3개월판매": int(dest["최근3개월판매"]),
+                        "추천사유": "판매 저조 점포 과재고 → 판매 우수 점포 이동"
+                    })
+
+        rec_df = pd.DataFrame(recommendations)
+
+        if not rec_df.empty:
+            st.dataframe(rec_df.head(20), use_container_width=True)
+        else:
+            st.info("현재 조건에 해당하는 점출/점입 추천 항목이 없습니다.")
+
+    else:
+        st.info("점출 추천을 위해 재고/판매 파일의 스타일코드, 점포명, 판매수량 컬럼이 필요합니다.")
+
+    st.divider()
+
+    # ======================
+    # 창고 출고배분 추천
+    # ======================
+
+    st.subheader("창고 출고배분 추천")
+
+    if inv_type_col and inv_style_col and inv_store_col and sales_style_col and sales_store_col and sales_qty_col:
+
+        warehouse = inventory[inventory[inv_type_col].astype(str).str.contains("창고", na=False)].copy()
+
+        if not warehouse.empty:
+            wh_stock = warehouse.groupby(inv_style_col)[inv_stock_col].sum().reset_index()
+            wh_stock.columns = ["스타일코드", "창고재고"]
+
+            sales_rank = sales.groupby(
+                [sales_style_col, sales_store_col]
+            )[sales_qty_col].sum().reset_index()
+
+            sales_rank.columns = ["스타일코드", "추천점포", "최근3개월판매"]
+
+            allocation = pd.merge(
+                wh_stock,
+                sales_rank,
+                on="스타일코드",
+                how="left"
+            )
+
+            allocation = allocation.sort_values(
+                ["창고재고", "최근3개월판매"],
+                ascending=[False, False]
+            )
+
+            allocation["추천수량"] = allocation.apply(
+                lambda x: min(int(x["창고재고"]), 5) if pd.notna(x["최근3개월판매"]) else 0,
+                axis=1
+            )
+
+            allocation["추천사유"] = "창고재고 보유 + 최근 판매 우수 점포 우선 배분"
+
+            allocation = allocation[allocation["추천수량"] > 0]
+
+            if not allocation.empty:
+                st.dataframe(allocation.head(20), use_container_width=True)
+            else:
+                st.info("현재 조건에 해당하는 창고 출고배분 추천 항목이 없습니다.")
+        else:
+            st.info("창고 재고 데이터가 없습니다.")
+
+    else:
+        st.info("창고 출고배분을 위해 재고구분, 스타일코드, 점포명, 판매수량 컬럼이 필요합니다.")
+
+    st.divider()
+
+    # ======================
+    # 상품 분석
     # ======================
 
     st.subheader("상품 분석")
@@ -232,14 +382,18 @@ if inventory_file and summary_file and sales_file:
         "스타일명",
         "색상",
         "사이즈",
-        "현재고",
-        "누계판매",
-        "누계총재고"
+        "PLU",
+        "현판가",
+        "누계판매수량",
+        "누계총재고수량"
     ]
 
     visible_cols = [c for c in preferred_cols if c in summary.columns]
 
-    st.dataframe(summary[visible_cols].head(100), use_container_width=True)
+    if visible_cols:
+        st.dataframe(summary[visible_cols].head(100), use_container_width=True)
+    else:
+        st.dataframe(summary.head(100), use_container_width=True)
 
 else:
-    st.info("좌측에서 3개 파일을 업로드해주세요")
+    st.info("좌측에서 재고 파일, 총괄장, 판매리스트 3개 파일을 업로드해주세요.")
