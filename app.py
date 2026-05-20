@@ -62,10 +62,6 @@ if inventory_file and summary_file and sales_file:
 
     st.success("파일 업로드 완료")
 
-    # ======================
-    # 자동 컬럼 매핑
-    # ======================
-
     stock_col = find_col(
         inventory,
         ["현재고", "재고수량", "재고", "수량", "누계총재고", "총재고", "stock_qty"]
@@ -81,11 +77,21 @@ if inventory_file and summary_file and sales_file:
         ["카테고리", "아이템", "품목", "세분류"]
     )
 
-    # 자동 인식 실패 시에만 선택 노출
+    style_col = find_col(
+        summary,
+        ["스타일코드"]
+    )
+
+    style_name_col = find_col(
+        summary,
+        ["스타일명", "상품명"]
+    )
+
     with st.expander("컬럼 매핑 확인 / 수정", expanded=False):
         st.write("자동 인식된 재고 수량 컬럼:", stock_col if stock_col else "인식 실패")
         st.write("자동 인식된 판매 수량 컬럼:", sales_col if sales_col else "인식 실패")
         st.write("자동 인식된 카테고리 컬럼:", category_col if category_col else "인식 실패")
+        st.write("자동 인식된 스타일코드 컬럼:", style_col if style_col else "인식 실패")
 
         if stock_col is None:
             stock_col = st.selectbox("재고 수량 컬럼 선택", options=list(inventory.columns))
@@ -98,9 +104,8 @@ if inventory_file and summary_file and sales_file:
             if category_col == "선택 안 함":
                 category_col = None
 
-    # ======================
-    # 숫자 변환
-    # ======================
+        if style_col is None:
+            style_col = st.selectbox("스타일코드 컬럼 선택", options=list(summary.columns))
 
     inventory[stock_col] = to_number(inventory[stock_col])
     summary[sales_col] = to_number(summary[sales_col])
@@ -117,10 +122,6 @@ if inventory_file and summary_file and sales_file:
     season_progress = 42
     expected_rate = 25
 
-    # ======================
-    # KPI
-    # ======================
-
     st.subheader("핵심 KPI")
 
     col1, col2, col3, col4 = st.columns(4)
@@ -132,10 +133,6 @@ if inventory_file and summary_file and sales_file:
 
     st.divider()
 
-    # ======================
-    # 카테고리별 판매
-    # ======================
-
     st.subheader("카테고리별 판매")
 
     if category_col:
@@ -146,9 +143,60 @@ if inventory_file and summary_file and sales_file:
 
     st.divider()
 
-    # ======================
-    # 상품 분석
-    # ======================
+    st.subheader("문제 상품 TOP 10")
+
+    if style_col:
+        df = summary.copy()
+
+        df["판매"] = to_number(df[sales_col])
+
+        stock_in_summary_col = find_col(
+            summary,
+            ["현재고", "누계총재고", "총재고", "재고수량", "재고"]
+        )
+
+        if stock_in_summary_col:
+            df["재고"] = to_number(df[stock_in_summary_col])
+        else:
+            df["재고"] = 0
+
+        group_dict = {
+            "판매": "sum",
+            "재고": "sum"
+        }
+
+        if style_name_col:
+            group_dict[style_name_col] = "first"
+
+        if category_col:
+            group_dict[category_col] = "first"
+
+        top_df = df.groupby(style_col).agg(group_dict).reset_index()
+
+        top_df["판매율"] = top_df.apply(
+            lambda x: x["판매"] / (x["판매"] + x["재고"]) * 100
+            if (x["판매"] + x["재고"]) > 0 else 0,
+            axis=1
+        )
+
+        def risk_level(rate):
+            if rate < 30:
+                return "🔴 상"
+            elif rate < 60:
+                return "🟡 중"
+            else:
+                return "🔵 하"
+
+        top_df["위험도"] = top_df["판매율"].apply(risk_level)
+        top_df["판매율"] = top_df["판매율"].round(1)
+
+        top10 = top_df.sort_values("판매율").head(10)
+
+        st.dataframe(top10, use_container_width=True)
+    else:
+        st.warning("스타일코드 컬럼을 찾지 못했습니다.")
+
+    st.divider()
 
     st.subheader("상품 분석")
 
