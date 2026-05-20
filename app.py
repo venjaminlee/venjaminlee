@@ -4,10 +4,6 @@ import pandas as pd
 st.set_page_config(page_title="TOPS AI PoC", layout="wide")
 st.title("TOPS 직매입 운영 분석 대시보드")
 
-# ======================
-# 파일 업로드
-# ======================
-
 st.sidebar.header("데이터 업로드")
 
 inventory_file = st.sidebar.file_uploader("재고 파일", type=["xlsx"])
@@ -20,7 +16,6 @@ if inventory_file and summary_file and sales_file:
     summary = pd.read_excel(summary_file, engine="openpyxl")
     sales = pd.read_excel(sales_file, engine="openpyxl")
 
-    # 컬럼 공백 제거
     inventory.columns = inventory.columns.astype(str).str.strip()
     summary.columns = summary.columns.astype(str).str.strip()
     sales.columns = sales.columns.astype(str).str.strip()
@@ -28,10 +23,10 @@ if inventory_file and summary_file and sales_file:
     st.success("파일 업로드 완료")
 
     # ======================
-    # 컬럼 선택 (핵심🔥)
+    # 컬럼 선택
     # ======================
 
-    st.subheader("컬럼 매핑 (처음 한 번만 설정)")
+    st.subheader("컬럼 매핑")
 
     stock_col = st.selectbox(
         "재고 수량 컬럼 선택",
@@ -39,9 +34,16 @@ if inventory_file and summary_file and sales_file:
     )
 
     sales_col = st.selectbox(
-        "총괄장 판매 수량 컬럼 선택",
+        "판매 수량 컬럼 선택",
         options=list(summary.columns)
     )
+
+    # ======================
+    # 숫자 변환 (핵심🔥)
+    # ======================
+
+    inventory[stock_col] = pd.to_numeric(inventory[stock_col], errors='coerce').fillna(0)
+    summary[sales_col] = pd.to_numeric(summary[sales_col], errors='coerce').fillna(0)
 
     # ======================
     # KPI 계산
@@ -50,11 +52,10 @@ if inventory_file and summary_file and sales_file:
     total_stock = inventory[stock_col].sum()
     total_sales = summary[sales_col].sum()
 
-    sell_through = (
-        total_sales / (total_sales + total_stock) * 100
-        if (total_sales + total_stock) > 0
-        else 0
-    )
+    if (total_sales + total_stock) > 0:
+        sell_through = (total_sales / (total_sales + total_stock)) * 100
+    else:
+        sell_through = 0
 
     season_progress = 42
     expected_rate = 25
@@ -109,22 +110,6 @@ if inventory_file and summary_file and sales_file:
         st.dataframe(summary[display_cols].head(100), use_container_width=True)
     else:
         st.dataframe(summary.head(100), use_container_width=True)
-
-    st.divider()
-
-    # ======================
-    # 원본 데이터 확인
-    # ======================
-
-    with st.expander("데이터 컬럼 확인 (문제 있을 때만 확인)"):
-        st.write("재고 컬럼")
-        st.write(list(inventory.columns))
-
-        st.write("총괄장 컬럼")
-        st.write(list(summary.columns))
-
-        st.write("판매리스트 컬럼")
-        st.write(list(sales.columns))
 
 else:
     st.info("좌측에서 3개 파일을 업로드해주세요")
