@@ -8,7 +8,9 @@ st.markdown("""
 .block-container {
     padding-top: 1rem;
     padding-bottom: 1rem;
-    max-width: 1180px;
+    max-width: 100% !important;
+    padding-left: 1.5rem !important;
+    padding-right: 1.5rem !important;
 }
 h1 {
     font-size: 24px !important;
@@ -25,7 +27,7 @@ div[data-testid="stMetricLabel"] {
     font-size: 12px !important;
 }
 section[data-testid="stSidebar"] {
-    width: 220px !important;
+    width: 200px !important;
 }
 section[data-testid="stSidebar"] * {
     font-size: 12px !important;
