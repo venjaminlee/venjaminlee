@@ -17,9 +17,9 @@ sales_file = st.sidebar.file_uploader("판매리스트", type=["xlsx"])
 
 if inventory_file and summary_file and sales_file:
 
-    inventory = pd.read_excel(inventory_file)
-    summary = pd.read_excel(summary_file)
-    sales = pd.read_excel(sales_file)
+inventory = pd.read_excel(inventory_file, engine="openpyxl")
+summary = pd.read_excel(summary_file, engine="openpyxl")
+sales = pd.read_excel(sales_file, engine="openpyxl")
 
     st.success("파일 업로드 완료")
 
