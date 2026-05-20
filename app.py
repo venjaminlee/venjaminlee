@@ -526,7 +526,6 @@ if brand_col and brand_col in diagnosis.columns:
         use_container_width=True,
         height=420
 )
-        )
 
 else:
     st.info("좌측에서 재고 파일, 총괄장, 판매리스트 3개 파일을 업로드해주세요.")
