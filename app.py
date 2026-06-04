@@ -276,8 +276,8 @@ if inventory_file and summary_file and sales_file:
 
     c1.metric("판매율", f"{sell_through:.1f}%", f"{sell_through - 60:.1f}%")
     c2.metric("즉시 조치", f"{action_count:,}")
-    c3.metric("판매 부진", f"{season_bad:,}")
-    c4.metric("체화/할인", f"{stock_bad:,}")
+    c3.metric("우선 조치", f"{risk_count:,}")
+    c4.metric("할인 검토", f"{stock_bad:,}")
     c5.metric("관리 상품", f"{filter_df.shape[0]:,}")
     st.caption(
     f"현재 판매율 {sell_through:.1f}% / 즉시 조치 대상 {action_count}개 상품"
