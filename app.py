@@ -6,46 +6,25 @@ st.set_page_config(page_title="TOPS AI PoC", layout="wide")
 st.markdown("""
 <style>
 .block-container {
-    padding-top: 1rem;
-    padding-bottom: 1rem;
+    padding-top: 0.8rem;
+    padding-bottom: 0.8rem;
     max-width: 100% !important;
-    padding-left: 1.5rem !important;
-    padding-right: 1.5rem !important;
+    padding-left: 1.2rem !important;
+    padding-right: 1.2rem !important;
 }
-h1 {
-    font-size: 24px !important;
-    margin-bottom: 0.4rem !important;
-}
-h2, h3 {
-    font-size: 17px !important;
-    margin-top: 0.6rem !important;
-}
-div[data-testid="stMetricValue"] {
-    font-size: 21px !important;
-}
-div[data-testid="stMetricLabel"] {
-    font-size: 12px !important;
-}
-section[data-testid="stSidebar"] {
-    width: 200px !important;
-}
-section[data-testid="stSidebar"] * {
-    font-size: 12px !important;
-}
-.stDataFrame, .stTable {
-    font-size: 11px !important;
-}
-div[data-testid="stDataFrame"] {
-    font-size: 11px !important;
-}
-hr {
-    margin: 0.8rem 0 !important;
-}
+h1 { font-size: 22px !important; margin-bottom: 0.3rem !important; }
+h2, h3 { font-size: 16px !important; margin-top: 0.5rem !important; }
+div[data-testid="stMetricValue"] { font-size: 20px !important; }
+div[data-testid="stMetricLabel"] { font-size: 11px !important; }
+section[data-testid="stSidebar"] { width: 205px !important; }
+section[data-testid="stSidebar"] * { font-size: 11px !important; }
+div[data-testid="stDataFrame"] { font-size: 10px !important; }
+hr { margin: 0.7rem 0 !important; }
 .small-note {
-    font-size: 12px;
+    font-size: 11px;
     color: #6b7280;
     margin-top: -4px;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -134,14 +113,6 @@ def diagnose_reason(row):
         return "정상 범위"
 
 
-def gap_text(gap):
-    if gap < 0:
-        return f"목표 대비 {abs(gap):.1f}% 부족"
-    elif gap > 0:
-        return f"목표 대비 {gap:.1f}% 초과"
-    return "목표 수준"
-
-
 def format_number_cols(df):
     out = df.copy()
     for col in out.columns:
@@ -155,13 +126,9 @@ def format_number_cols(df):
 
 if inventory_file and summary_file and sales_file:
 
-    inventory = pd.read_excel(inventory_file, engine="openpyxl")
-    summary = pd.read_excel(summary_file, engine="openpyxl")
-    sales = pd.read_excel(sales_file, engine="openpyxl")
-
-    inventory = make_unique_columns(inventory)
-    summary = make_unique_columns(summary)
-    sales = make_unique_columns(sales)
+    inventory = make_unique_columns(pd.read_excel(inventory_file, engine="openpyxl"))
+    summary = make_unique_columns(pd.read_excel(summary_file, engine="openpyxl"))
+    sales = make_unique_columns(pd.read_excel(sales_file, engine="openpyxl"))
 
     st.success("파일 업로드 완료")
 
@@ -197,13 +164,6 @@ if inventory_file and summary_file and sales_file:
         st.write("카테고리:", category_col)
         st.write("스타일코드:", style_col)
 
-        if inv_stock_col is None:
-            inv_stock_col = st.selectbox("재고 수량 컬럼 선택", inventory.columns)
-        if sum_sales_col is None:
-            sum_sales_col = st.selectbox("총괄 판매 수량 컬럼 선택", summary.columns)
-        if sum_stock_col is None:
-            sum_stock_col = st.selectbox("총괄 재고 수량 컬럼 선택", summary.columns)
-
     inventory[inv_stock_col] = to_number(inventory[inv_stock_col])
     summary[sum_sales_col] = to_number(summary[sum_sales_col])
     summary[sum_stock_col] = to_number(summary[sum_stock_col])
@@ -227,10 +187,6 @@ if inventory_file and summary_file and sales_file:
         "의류": 60,
         "슈즈": 50
     }
-
-    # ======================
-    # 상품 진단 데이터 생성
-    # ======================
 
     df = summary.copy()
     df["판매"] = to_number(df[sum_sales_col])
@@ -270,9 +226,9 @@ if inventory_file and summary_file and sales_file:
     )
 
     diagnosis["문제원인"] = diagnosis.apply(diagnose_reason, axis=1)
-    diagnosis["해석"] = diagnosis["GAP"].apply(gap_text)
+
     # ======================
-    # 필터 영역
+    # 필터
     # ======================
 
     st.sidebar.divider()
@@ -280,10 +236,6 @@ if inventory_file and summary_file and sales_file:
 
     filter_df = diagnosis.copy()
 
-    selected_category = "전체"
-    selected_brand = "전체"
-
-    # 카테고리 필터
     if category_col and category_col in diagnosis.columns:
         category_options = ["전체"] + sorted(diagnosis[category_col].dropna().astype(str).unique().tolist())
         selected_category = st.sidebar.selectbox("카테고리", category_options)
@@ -291,40 +243,81 @@ if inventory_file and summary_file and sales_file:
         if selected_category != "전체":
             filter_df = filter_df[filter_df[category_col].astype(str) == selected_category]
 
-    # 브랜드 필터
     if brand_col and brand_col in diagnosis.columns:
         brand_options = ["전체"] + sorted(filter_df[brand_col].dropna().astype(str).unique().tolist())
         selected_brand = st.sidebar.selectbox("브랜드", brand_options)
 
         if selected_brand != "전체":
             filter_df = filter_df[filter_df[brand_col].astype(str) == selected_brand]
+
     # ======================
     # KPI
     # ======================
 
+    risk_count = filter_df[
+        filter_df["상태"].astype(str).str.contains("시즌부진|체화위험")
+    ].shape[0]
+
+    action_count = filter_df[
+        filter_df["추천액션"].astype(str).str.contains("점출|할인|배분")
+    ].shape[0]
+
+    season_bad = filter_df[
+        filter_df["상태"].astype(str).str.contains("시즌부진")
+    ].shape[0]
+
+    stock_bad = filter_df[
+        filter_df["상태"].astype(str).str.contains("체화위험")
+    ].shape[0]
+
     st.subheader("핵심 KPI")
     c1, c2, c3, c4, c5 = st.columns(5)
 
-    risk_count = filter_df[filter_df["상태"].astype(str).str.contains("시즌부진|체화위험")].shape[0]
-    action_count = filter_df[filter_df["추천액션"].astype(str).str.contains("점출|할인|배분")].shape[0]
-
     c1.metric("실제 판매율", f"{sell_through:.1f}%")
-    c2.metric("총 판매수량", f"{int(total_sales):,}")
-    c3.metric("총 재고", f"{int(total_stock):,}")
-    c4.metric("상품 수", f"{product_count:,}")
-    c5.metric("조치 필요", f"{action_count:,}")
+    c2.metric("조치 필요", f"{action_count:,}")
+    c3.metric("시즌 부진", f"{season_bad:,}")
+    c4.metric("체화 위험", f"{stock_bad:,}")
+    c5.metric("상품 수", f"{filter_df.shape[0]:,}")
 
     st.divider()
 
     # ======================
-    # 상단 요약
+    # 상품 진단 TOP + 카테고리
     # ======================
 
-    left, right = st.columns([0.9, 1.1])
+    left, right = st.columns([1.1, 0.9])
 
     with left:
+        st.subheader("상품 진단 TOP 15")
+        st.markdown("<div class='small-note'>GAP이 낮은 상품부터 우선 점검</div>", unsafe_allow_html=True)
+
+        view_cols = []
+        for col in [
+            style_name_col,
+            brand_col,
+            "총판매율",
+            "GAP",
+            "문제원인",
+            "상태",
+            "추천액션"
+        ]:
+            if col and col in filter_df.columns and col not in view_cols:
+                view_cols.append(col)
+
+        diag_view = filter_df.sort_values("GAP").head(15)[view_cols]
+
+        st.dataframe(
+            format_number_cols(diag_view).style.map(
+                lambda x: "color: red; font-weight: bold;" if isinstance(x, (int, float)) and x < 0 else "",
+                subset=["GAP"]
+            ),
+            use_container_width=True,
+            height=330
+        )
+
+    with right:
         st.subheader("카테고리별 운영 현황")
-        st.markdown("<div class='small-note'>총판매율·목표·구성비 중심으로 확인</div>", unsafe_allow_html=True)
+        st.markdown("<div class='small-note'>총판매율과 목표 대비 판단 중심</div>", unsafe_allow_html=True)
 
         if category_col:
             cat = summary.groupby(category_col).agg({
@@ -339,41 +332,14 @@ if inventory_file and summary_file and sales_file:
             ).round(1)
 
             cat["목표판매율"] = cat[category_col].map(category_target).fillna(60)
-            cat["재고구성비"] = (cat[sum_stock_col] / cat[sum_stock_col].sum() * 100).round(1)
-            cat["판매구성비"] = (cat[sum_sales_col] / cat[sum_sales_col].sum() * 100).round(1)
+            cat["GAP"] = (cat["총판매율"] - cat["목표판매율"]).round(1)
             cat["판단"] = cat.apply(
                 lambda x: "정상" if x["총판매율"] >= x["목표판매율"] else "점검",
                 axis=1
             )
 
-            cat_view = cat[[category_col, "총판매율", "목표판매율", "재고구성비", "판매구성비", "판단"]]
-            st.dataframe(cat_view, use_container_width=True, height=150)
-
-    with right:
-        st.subheader("상품 진단 TOP 15")
-        st.markdown("<div class='small-note'>GAP이 낮은 상품부터 우선 점검</div>", unsafe_allow_html=True)
-
-        view_cols = []
-        for col in [
-            style_col,
-            style_name_col,
-            category_col,
-            brand_col,
-            "판매",
-            "재고",
-            "총판매율",
-            "기대판매율",
-            "GAP",
-            "문제원인",
-            "해석",
-            "상태",
-            "추천액션"
-        ]:
-            if col and col in diagnosis.columns and col not in view_cols:
-                view_cols.append(col)
-
-        diag_view = filter_df.sort_values("GAP").head(15)[view_cols]
-        st.dataframe(format_number_cols(diag_view), use_container_width=True, height=310)
+            cat_view = cat[[category_col, "총판매율", "목표판매율", "GAP", "판단"]]
+            st.dataframe(format_number_cols(cat_view), use_container_width=True, height=180)
 
     st.divider()
 
@@ -456,7 +422,7 @@ if inventory_file and summary_file and sales_file:
             st.info("점출 추천을 위해 재고/판매 파일의 스타일코드, 점포명, 판매수량 컬럼이 필요합니다.")
 
     with tab2:
-        if inv_type_col and inv_style_col and inv_store_col and sales_style_col and sales_store_col and sales_qty_col:
+        if inv_type_col and inv_style_col and sales_style_col and sales_store_col and sales_qty_col:
 
             warehouse = inventory[
                 inventory[inv_type_col].astype(str).str.contains("창고", na=False)
@@ -517,18 +483,17 @@ if inventory_file and summary_file and sales_file:
             "기대판매율",
             "GAP",
             "문제원인",
-            "해석",
             "상태",
             "추천액션"
         ]:
-            if col and col in diagnosis.columns and col not in full_cols:
+            if col and col in filter_df.columns and col not in full_cols:
                 full_cols.append(col)
 
         st.dataframe(
-        format_number_cols(filter_df[full_cols].sort_values("GAP")),
-        use_container_width=True,
-        height=420
-)
+            format_number_cols(filter_df[full_cols].sort_values("GAP")),
+            use_container_width=True,
+            height=420
+        )
 
 else:
     st.info("좌측에서 재고 파일, 총괄장, 판매리스트 3개 파일을 업로드해주세요.")
