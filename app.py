@@ -1,3 +1,4 @@
+import plotly.express as px
 import streamlit as st
 import pandas as pd
 
@@ -13,15 +14,15 @@ st.markdown("""
     padding-right: 1.2rem !important;
 }
 h1 { font-size: 20px !important; margin-bottom: 0.3rem !important; }
-h2, h3 { font-size: 16px !important; margin-top: 0.5rem !important; }
+h2, h3 { font-size: 14px !important; margin-top: 0.5rem !important; }
 div[data-testid="stMetricValue"] { font-size: 16px !important; }
 div[data-testid="stMetricLabel"] { font-size: 10px !important; }
-section[data-testid="stSidebar"] { width: 160px !important; }
-section[data-testid="stSidebar"] * { font-size: 11px !important; }
+section[data-testid="stSidebar"] { width: 150px !important; }
+section[data-testid="stSidebar"] * { font-size: 10px !important; }
 div[data-testid="stDataFrame"] { font-size: 9px !important; }
 hr { margin: 0.7rem 0 !important; }
 .small-note {
-    font-size: 11px;
+    font-size: 10px;
     color: #6b7280;
     margin-top: -4px;
     margin-bottom: 6px;
@@ -127,7 +128,7 @@ def format_number_cols(df):
     for col in out.columns:
         if pd.api.types.is_numeric_dtype(out[col]):
             if "율" in col or "비" in col or "GAP" in col:
-                out[col] = out[col].round(1)
+                out[col] = out[col].round(0).astype(int)
             else:
                 out[col] = out[col].round(0).astype(int)
     return out
@@ -349,7 +350,21 @@ if inventory_file and summary_file and sales_file:
 
             cat_view = cat[[category_col, "총판매율", "목표판매율", "GAP", "판단"]]
             st.dataframe(format_number_cols(cat_view), use_container_width=True, height=180)
+        st.subheader("카테고리별 판매 구성비")
 
+        if category_col:
+            pie_data = cat[[category_col, sum_sales_col]].copy()
+            pie_data.columns = ["카테고리", "판매수량"]
+
+            st.plotly_chart(
+                px.pie(
+                    pie_data,
+                    names="카테고리",
+                    values="판매수량",
+                    hole=0.45
+                ),
+                use_container_width=True
+        )
     st.divider()
 
     # ======================
