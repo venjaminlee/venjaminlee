@@ -267,7 +267,8 @@ if inventory_file and summary_file and sales_file:
     ].shape[0]
 
     stock_bad = filter_df[
-        filter_df["상태"].astype(str).str.contains("체화위험")
+        filter_df["상태"].astype(str).str.contains("체화위험|판매부진")
+        & filter_df["추천액션"].astype(str).str.contains("할인")
     ].shape[0]
 
     st.subheader("핵심 KPI")
@@ -276,7 +277,7 @@ if inventory_file and summary_file and sales_file:
     c1.metric("판매율", f"{sell_through:.1f}%", f"{sell_through - 60:.1f}%")
     c2.metric("즉시 조치", f"{action_count:,}")
     c3.metric("판매 부진", f"{season_bad:,}")
-    c4.metric("체화 위험", f"{stock_bad:,}")
+    c4.metric("체화/할인", f"{stock_bad:,}")
     c5.metric("관리 상품", f"{filter_df.shape[0]:,}")
     st.caption(
     f"현재 판매율 {sell_through:.1f}% / 즉시 조치 대상 {action_count}개 상품"
@@ -417,8 +418,8 @@ if inventory_file and summary_file and sales_file:
                     if qty > 0:
                         recommendations.append({
                             "스타일코드": style,
-                            "출발점포": source["점포명"],
-                            "도착점포": dest["점포명"],
+                            "재고과다점": source["점포명"],
+                            "판매우수점": dest["점포명"],
                             "추천수량": qty,
                             "출발재고": int(source["재고"]),
                             "출발3개월판매": int(source["최근3개월판매"]),
