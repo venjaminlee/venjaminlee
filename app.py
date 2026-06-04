@@ -31,12 +31,12 @@ hr { margin: 0.7rem 0 !important; }
 """, unsafe_allow_html=True)
 
 st.markdown("""
-<div style="padding: 10px 0 18px 0;">
-    <h1 style="font-size:26px; margin-bottom:6px;">
-        TOPS AI 액션 추천 대시보드
+<div style="padding: 8px 0 14px 0;">
+    <h1 style="font-size:18px; margin-bottom:4px;">
+        TOPS AI 재고 운영 의사결정 시스템
     </h1>
-    <div style="font-size:15px; color:#4b5563;">
-        데이터를 보는 툴이 아니라, 무엇을 해야 하는지 알려주는 툴
+    <div style="font-size:10px; color:#4b5563;">
+        판매율과 재고를 기반으로 우선 조치가 필요한 상품과 점포 액션을 자동 추천합니다.
     </div>
 </div>
 """, unsafe_allow_html=True)
@@ -283,11 +283,11 @@ if inventory_file and summary_file and sales_file:
     st.subheader("핵심 KPI")
     c1, c2, c3, c4, c5 = st.columns(5)
 
-    c1.metric("실제 판매율", f"{sell_through:.1f}%")
-    c2.metric("조치 필요", f"{action_count:,}")
-    c3.metric("시즌 부진", f"{season_bad:,}")
+    c1.metric("판매율", f"{sell_through:.1f}%", f"{sell_through - 60:.1f}%")
+    c2.metric("즉시 조치", f"{action_count:,}")
+    c3.metric("판매 부진", f"{season_bad:,}")
     c4.metric("체화 위험", f"{stock_bad:,}")
-    c5.metric("상품 수", f"{filter_df.shape[0]:,}")
+    c5.metric("관리 상품", f"{filter_df.shape[0]:,}")
 
     st.divider()
 
@@ -298,8 +298,8 @@ if inventory_file and summary_file and sales_file:
     left, right = st.columns([1.1, 0.9])
 
     with left:
-        st.subheader("상품 진단 TOP 15")
-        st.markdown("<div class='small-note'>GAP이 낮은 상품부터 우선 점검</div>", unsafe_allow_html=True)
+        st.subheader("AI 우선 조치 대상 상품")
+        st.markdown("<div class='small-note'>목표 대비 부족폭이 큰 상품부터 우선 점검</div>", unsafe_allow_html=True)
 
         view_cols = []
         for col in [
@@ -349,22 +349,21 @@ if inventory_file and summary_file and sales_file:
 
             cat_view = cat[[category_col, "총판매율", "목표판매율", "GAP", "판단"]]
             st.dataframe(format_number_cols(cat_view), use_container_width=True, height=180)
-        # 카테고리별 판매 구성비 그래프는 발표용 화면 압축을 위해 임시 제외
-        st.subheader("카테고리별 판매 구성비")
-
-        if category_col:
-            pie_data = cat[[category_col, sum_sales_col]].copy()
-            pie_data.columns = ["카테고리", "판매수량"]
-
-            st.plotly_chart(
-                px.pie(
-                    pie_data,
-                    names="카테고리",
-                    values="판매수량",
-                    hole=0.45
-                ),
-                use_container_width=True
-        )
+#        st.subheader("카테고리별 판매 구성비")
+#
+#        if category_col:
+#            pie_data = cat[[category_col, sum_sales_col]].copy()
+#            pie_data.columns = ["카테고리", "판매수량"]
+#
+#            st.plotly_chart(
+#                px.pie(
+#                    pie_data,
+#                    names="카테고리",
+#                    values="판매수량",
+#                    hole=0.45
+#                ),
+#                use_container_width=True
+#        )
     st.divider()
 
     # ======================
