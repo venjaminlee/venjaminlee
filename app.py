@@ -287,14 +287,15 @@ if inventory_file and summary_file and sales_file:
     c3.metric("판매 부진", f"{season_bad:,}")
     c4.metric("체화 위험", f"{stock_bad:,}")
     c5.metric("관리 상품", f"{filter_df.shape[0]:,}")
-
+    st.caption(
+    f"현재 판매율 {sell_through:.1f}% / 즉시 조치 대상 {action_count}개 상품"
     st.divider()
 
     # ======================
     # 상품 진단 TOP + 카테고리
     # ======================
 
-    left, right = st.columns([1.4, 0.6])
+    left, right = st.columns([1.2, 0.8])
 
     with left:
         st.subheader("AI 우선 조치 대상 상품")
