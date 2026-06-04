@@ -307,7 +307,6 @@ if inventory_file and summary_file and sales_file:
             brand_col,
             "총판매율",
             "GAP",
-            "문제원인",
             "상태",
             "추천액션"
         ]:
@@ -322,7 +321,7 @@ if inventory_file and summary_file and sales_file:
                 subset=["GAP"]
             ),
             use_container_width=True,
-            height=220
+            height=300
         )
 
     with right:
@@ -350,6 +349,7 @@ if inventory_file and summary_file and sales_file:
 
             cat_view = cat[[category_col, "총판매율", "목표판매율", "GAP", "판단"]]
             st.dataframe(format_number_cols(cat_view), use_container_width=True, height=180)
+        # 카테고리별 판매 구성비 그래프는 발표용 화면 압축을 위해 임시 제외
         st.subheader("카테고리별 판매 구성비")
 
         if category_col:
@@ -439,7 +439,7 @@ if inventory_file and summary_file and sales_file:
             rec_df = pd.DataFrame(recommendations)
 
             if not rec_df.empty:
-                st.dataframe(rec_df.head(30), use_container_width=True, height=360)
+                st.dataframe(rec_df.head(30), use_container_width=True, height=300)
             else:
                 st.info("현재 조건에 해당하는 점출/점입 추천 항목이 없습니다.")
         else:
@@ -483,7 +483,7 @@ if inventory_file and summary_file and sales_file:
                 allocation = allocation[allocation["추천수량"] > 0]
 
                 if not allocation.empty:
-                    st.dataframe(allocation.head(30), use_container_width=True, height=360)
+                    st.dataframe(allocation.head(30), use_container_width=True, height=300)
                 else:
                     st.info("현재 조건에 해당하는 창고 출고배분 추천 항목이 없습니다.")
             else:
