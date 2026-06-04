@@ -13,13 +13,13 @@ st.markdown("""
     padding-left: 1.2rem !important;
     padding-right: 1.2rem !important;
 }
-h1 { font-size: 20px !important; margin-bottom: 0.3rem !important; }
-h2, h3 { font-size: 14px !important; margin-top: 0.5rem !important; }
-div[data-testid="stMetricValue"] { font-size: 16px !important; }
-div[data-testid="stMetricLabel"] { font-size: 10px !important; }
-section[data-testid="stSidebar"] { width: 150px !important; }
-section[data-testid="stSidebar"] * { font-size: 10px !important; }
-div[data-testid="stDataFrame"] { font-size: 9px !important; }
+h1 { font-size: 18px !important; margin-bottom: 0.3rem !important; }
+h2, h3 { font-size: 13px !important; margin-top: 0.5rem !important; }
+div[data-testid="stMetricValue"] { font-size: 14px !important; }
+div[data-testid="stMetricLabel"] { font-size: 9px !important; }
+section[data-testid="stSidebar"] { width: 140px !important; }
+section[data-testid="stSidebar"] * { font-size: 9px !important; }
+div[data-testid="stDataFrame"] { font-size: 8px !important; }
 hr { margin: 0.7rem 0 !important; }
 .small-note {
     font-size: 10px;
