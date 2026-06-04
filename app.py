@@ -263,11 +263,7 @@ if inventory_file and summary_file and sales_file:
     # ======================
     # KPI
     # ======================
-    st.caption(
-        f"현재 판매율은 목표 대비 {sell_through-60:.1f}% 차이가 있으며 "
-        f"{action_count}개 상품에 즉시 조치가 필요합니다."
-    )
-    risk_count = filter_df[
+      risk_count = filter_df[
         filter_df["상태"].astype(str).str.contains("시즌부진|체화위험")
     ].shape[0]
 
