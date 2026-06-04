@@ -322,7 +322,7 @@ if inventory_file and summary_file and sales_file:
                 subset=["GAP"]
             ),
             use_container_width=True,
-            height=330
+            height=220
         )
 
     with right:
