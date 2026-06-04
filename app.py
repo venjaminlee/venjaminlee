@@ -350,7 +350,7 @@ if inventory_file and summary_file and sales_file:
             )
             st.caption("카테고리별 실제 판매율과 목표 판매율 비교")
             st.bar_chart(
-                cat.set_index(category_col)[["총판매율", "목표판매율"]]
+                cat.set_index(category_col)[["총판매율"]]
             )
             cat_view = cat[[category_col, "총판매율", "목표판매율", "GAP", "판단"]]
             st.dataframe(format_number_cols(cat_view), use_container_width=True, height=180)
