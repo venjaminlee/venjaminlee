@@ -29,7 +29,16 @@ hr { margin: 0.7rem 0 !important; }
 </style>
 """, unsafe_allow_html=True)
 
-st.title("TOPS 직매입 운영 분석 대시보드")
+st.markdown("""
+<div style="padding: 10px 0 18px 0;">
+    <h1 style="font-size:26px; margin-bottom:6px;">
+        TOPS AI 액션 추천 대시보드
+    </h1>
+    <div style="font-size:15px; color:#4b5563;">
+        데이터를 보는 툴이 아니라, 무엇을 해야 하는지 알려주는 툴
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 with st.sidebar:
     st.header("데이터 업로드")
