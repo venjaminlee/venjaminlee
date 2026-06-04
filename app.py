@@ -90,22 +90,13 @@ def to_number(series):
 
 def classify_action(row):
     actual = row["총판매율"]
-    expected = row["기대판매율"]
 
-    if row["경과개월"] <= 7:
-        if actual < expected * 0.8:
-            return "🔴 시즌부진", "점출/배분 검토"
-        elif actual < expected:
-            return "🟡 주의", "관찰"
-        else:
-            return "🔵 정상", "유지"
+    if actual < 40:
+        return "🔴 판매부진", "점출/배분 검토"
+    elif actual < 60:
+        return "🟡 주의", "관찰"
     else:
-        if actual < 80:
-            return "🔴 체화위험", "할인 검토"
-        elif actual < 90:
-            return "🟡 잔여재고", "관찰"
-        else:
-            return "🔵 정상", "유지"
+        return "🔵 정상", "유지"
 
 
 def diagnose_reason(row):
@@ -226,7 +217,7 @@ if inventory_file and summary_file and sales_file:
     else:
         diagnosis["목표판매율"] = 60
 
-    diagnosis["경과개월"] = 2
+    diagnosis["경과개월"] = 7
     diagnosis["기대판매율"] = (diagnosis["목표판매율"] * (diagnosis["경과개월"] / 7)).round(1)
     diagnosis["GAP"] = (diagnosis["총판매율"] - diagnosis["기대판매율"]).round(1)
 
