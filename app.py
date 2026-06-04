@@ -289,6 +289,7 @@ if inventory_file and summary_file and sales_file:
     c5.metric("관리 상품", f"{filter_df.shape[0]:,}")
     st.caption(
     f"현재 판매율 {sell_through:.1f}% / 즉시 조치 대상 {action_count}개 상품"
+    )
     st.divider()
 
     # ======================
