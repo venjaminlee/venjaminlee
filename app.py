@@ -290,7 +290,7 @@ if inventory_file and summary_file and sales_file:
 
     st.progress(min(achievement_rate, 1.0))
 
-    st.caption(f"목표 판매율 {target_rate}% 대비 현재 {current_rate}% 달성")
+    st.caption(f"목표 판매율 {target_rate}% 대비 현재 {current_rate:.1f}% 달성")
     st.divider()
 
     # ======================
