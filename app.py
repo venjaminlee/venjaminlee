@@ -348,6 +348,7 @@ if inventory_file and summary_file and sales_file:
                 lambda x: "정상" if x["총판매율"] >= x["목표판매율"] else "점검",
                 axis=1
             )
+            st.caption("카테고리별 실제 판매율과 목표 판매율 비교")
             st.bar_chart(
                 cat.set_index(category_col)[["총판매율", "목표판매율"]]
             )
