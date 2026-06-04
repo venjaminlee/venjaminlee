@@ -263,7 +263,7 @@ if inventory_file and summary_file and sales_file:
     # ======================
     # KPI
     # ======================
-      risk_count = filter_df[
+    risk_count = filter_df[
         filter_df["상태"].astype(str).str.contains("시즌부진|체화위험")
     ].shape[0]
 
