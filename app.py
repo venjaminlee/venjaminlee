@@ -282,6 +282,15 @@ if inventory_file and summary_file and sales_file:
     st.caption(
     f"현재 판매율 {sell_through:.1f}% / 즉시 조치 대상 {action_count}개 상품"
     )
+    st.markdown("### 📌 핵심 KPI 요약")
+
+    target_rate = 60
+    current_rate = sell_through
+    achievement_rate = current_rate / target_rate
+
+    st.progress(min(achievement_rate, 1.0))
+
+    st.caption(f"목표 판매율 {target_rate}% 대비 현재 {current_rate}% 달성")
     st.divider()
 
     # ======================
@@ -339,7 +348,9 @@ if inventory_file and summary_file and sales_file:
                 lambda x: "정상" if x["총판매율"] >= x["목표판매율"] else "점검",
                 axis=1
             )
-
+            st.bar_chart(
+                cat.set_index(category_col)[["총판매율", "목표판매율"]]
+            )
             cat_view = cat[[category_col, "총판매율", "목표판매율", "GAP", "판단"]]
             st.dataframe(format_number_cols(cat_view), use_container_width=True, height=180)
 #        st.subheader("카테고리별 판매 구성비")
