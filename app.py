@@ -10,7 +10,7 @@ import streamlit as st
 
 
 # =========================================================
-# VERSION: V35.1 - fix top header overlap + TOP 15 price advice
+# VERSION: V37 - simplified colors/data + GAP-based single action
 # PAGE CONFIG
 # =========================================================
 
@@ -29,7 +29,7 @@ st.set_page_config(
 NAVY = "#111827"
 BLUE = "#356AE6"
 BLUE_DARK = "#1F4EB3"
-GREEN = "#16A085"
+GREEN = "#2B927F"
 AMBER = "#D97706"
 RED = "#DC4C64"
 PURPLE = "#7C5CE7"
@@ -232,10 +232,12 @@ st.markdown(
     }}
 
     .insight-card {{
+        background: #FFFFFF;
         border-radius: 12px;
         padding: 8px 9px;
         min-height: 72px;
         border: 1px solid #E7EAF0;
+        border-top: 3px solid #356AE6;
         box-shadow: 0 6px 16px rgba(15, 23, 42, 0.045);
     }}
 
@@ -421,7 +423,6 @@ st.markdown(
     .badge-amber {{ background: #FFF7E6; color: #B45309; }}
     .badge-blue {{ background: #EDF4FF; color: #2859B8; }}
     .badge-green {{ background: #ECF8F4; color: #0F766E; }}
-    .badge-purple {{ background: #F2EEFF; color: #6546C7; }}
 
     .stTabs [data-baseweb="tab-list"] {{
         gap: 5px;
@@ -536,21 +537,12 @@ def render_html_table(
             return f'<span class="badge {cls}">{html.escape(text)}</span>', ""
 
         if col == "추천액션":
-            if "점출" in text or "배분" in text:
-                cls = "badge-blue"
-            elif "관찰" in text:
-                cls = "badge-amber"
-            else:
-                cls = "badge-green"
-            return f'<span class="badge {cls}">{html.escape(text)}</span>', ""
-
-        if col == "가격 조정 어드바이스":
-            if "강한" in text:
+            if "2차" in text:
                 cls = "badge-red"
-            elif "추가" in text or "1차" in text:
+            elif "1차" in text:
                 cls = "badge-amber"
-            elif "프로모션" in text:
-                cls = "badge-purple"
+            elif "점 이동" in text:
+                cls = "badge-blue"
             else:
                 cls = "badge-green"
             return f'<span class="badge {cls}">{html.escape(text)}</span>', ""
@@ -611,12 +603,16 @@ def read_inventory_workbook(uploaded_file) -> tuple[pd.DataFrame, pd.DataFrame]:
 
 
 def classify_action(row: pd.Series) -> pd.Series:
-    actual = row["총판매율"]
-    if actual < 40:
-        return pd.Series(["🔴 판매부진", "점출/배분 검토"])
-    if actual < 60:
-        return pd.Series(["🟡 주의", "관찰"])
-    return pd.Series(["🔵 정상", "유지"])
+    """Assign one primary buyer action from the GAP severity only."""
+    gap = float(row["GAP"])
+
+    if gap < -30:
+        return pd.Series(["🔴 판매부진", "2차 가격 조정 검토"])
+    if gap < -20:
+        return pd.Series(["🔴 판매부진", "1차 가격 조정 검토"])
+    if gap < -10:
+        return pd.Series(["🟡 주의", "점 이동 검토"])
+    return pd.Series(["🔵 정상", "유지·모니터링"])
 
 
 def diagnose_reason(row: pd.Series) -> str:
@@ -631,19 +627,6 @@ def diagnose_reason(row: pd.Series) -> str:
     if row["경과개월"] > 7 and row["총판매율"] < 80:
         return "시즌 경과 체화 우려"
     return "정상 범위"
-
-
-def price_adjustment_advice(sell_through_rate: float) -> str:
-    """Return a buyer-facing price review suggestion based only on sell-through."""
-    if sell_through_rate >= 60:
-        return "정상가 유지"
-    if sell_through_rate >= 50:
-        return "단기 프로모션 검토"
-    if sell_through_rate >= 40:
-        return "1차 가격 조정 검토"
-    if sell_through_rate >= 30:
-        return "추가 가격 조정 검토"
-    return "강한 가격 조정 검토"
 
 
 def kpi_card(icon: str, label: str, value: str, subtext: str, tint: str) -> None:
@@ -662,10 +645,10 @@ def kpi_card(icon: str, label: str, value: str, subtext: str, tint: str) -> None
     )
 
 
-def insight_card(title: str, value: str, desc: str, bg: str) -> None:
+def insight_card(title: str, value: str, desc: str, accent: str) -> None:
     st.markdown(
         f"""
-        <div class="insight-card" style="background:{bg};">
+        <div class="insight-card" style="border-top-color:{accent};">
             <div class="insight-title">{title}</div>
             <div class="insight-value">{value}</div>
             <div class="insight-desc">{desc}</div>
@@ -842,7 +825,6 @@ diagnosis["기대판매율"] = (
 diagnosis["GAP"] = (diagnosis["총판매율"] - diagnosis["기대판매율"]).round(1)
 diagnosis[["상태", "추천액션"]] = diagnosis.apply(classify_action, axis=1)
 diagnosis["문제원인"] = diagnosis.apply(diagnose_reason, axis=1)
-diagnosis["가격 조정 어드바이스"] = diagnosis["총판매율"].apply(price_adjustment_advice)
 
 # Sidebar filters
 filter_df = diagnosis.copy()
@@ -881,12 +863,12 @@ sell_through = (
 target_rate = 60
 gap_to_target = sell_through - target_rate
 
-action_mask = filter_df["추천액션"].astype(str).str.contains("점출|할인|배분")
+action_mask = filter_df["추천액션"].astype(str) != "유지·모니터링"
 action_count = int(action_mask.sum())
 top_action_df = filter_df[action_mask].copy()
 
 risk_count = int(
-    ((filter_df["GAP"] <= -20) & (filter_df["재고"] > filter_df["판매"] * 2)).sum()
+    (filter_df["추천액션"].astype(str) == "2차 가격 조정 검토").sum()
 )
 stock_bad = int((filter_df["재고"] > filter_df["판매"] * 2).sum())
 avg_gap = float(top_action_df["GAP"].mean()) if not top_action_df.empty else 0.0
@@ -1077,30 +1059,41 @@ if category_col:
 
 def render_kpis() -> None:
     st.markdown('<div class="section-label">Executive Dashboard</div>', unsafe_allow_html=True)
-    c1, c2, c3, c4, c5 = st.columns(5)
+    c1, c2, c3, c4 = st.columns(4)
     with c1:
-        kpi_card("↗", "판매율", f"{sell_through:.1f}%", f"목표 대비 {gap_to_target:.1f}%p", "#E9F0FF")
+        kpi_card("↗", "판매율", f"{sell_through:.1f}%", "전체 누계 판매 기준", "#E9F0FF")
     with c2:
-        kpi_card("!", "관리 필요", f"{action_count:,}", "AI 우선 선별", "#FFF1F2")
+        kpi_card("±", "목표 대비 GAP", f"{gap_to_target:.1f}%p", f"목표 판매율 {target_rate}%", "#F3F4F6")
     with c3:
-        kpi_card("⇄", "점출 추천", f"{len(rec_df):,}", "점포 이동 후보", "#EEF7FF")
+        kpi_card("!", "최우선 관리", f"{risk_count:,}", "2차 가격 조정 검토", "#FFF1F2")
     with c4:
-        kpi_card("□", "체화 위험", f"{stock_bad:,}", "재고 모니터링", "#FFF8E8")
-    with c5:
         kpi_card("#", "관리 상품", f"{len(filter_df):,}", "분석 대상", "#F1ECFF")
 
 
 def render_insight_cards() -> None:
     st.markdown('<div class="section-label">AI Insight</div>', unsafe_allow_html=True)
-    cols = st.columns(4)
+    cols = st.columns(3)
     with cols[0]:
-        insight_card("판매 부진", f"{action_count}개", "목표 판매율 미달 상품을 자동 선별했습니다.", "#FFF2F3")
+        insight_card(
+            "평균 GAP",
+            f"{avg_gap:.1f}%p",
+            "조치 대상 상품의 평균 목표 대비 부족폭입니다.",
+            AMBER,
+        )
     with cols[1]:
-        insight_card("평균 GAP", f"{avg_gap:.1f}%p", "우선 조치 상품의 목표 대비 부족폭입니다.", "#FFF8E8")
+        insight_card(
+            "과재고 의심",
+            f"{stock_bad}개",
+            "판매수량 대비 재고가 두 배를 초과한 상품입니다.",
+            BLUE,
+        )
     with cols[2]:
-        insight_card("과재고 의심", f"{stock_bad}개", "판매 대비 재고가 높은 상품입니다.", "#EDF4FF")
-    with cols[3]:
-        insight_card("검토 대상 감소", f"{review_reduction:.0f}%", "전수 검토 대비 우선 점검 대상을 줄였습니다.", "#ECFAF5")
+        insight_card(
+            "검토 대상 감소",
+            f"{review_reduction:.0f}%",
+            "전수 검토 대비 우선 점검 대상을 줄였습니다.",
+            GREEN,
+        )
 
 
 def render_brand_store_charts() -> None:
@@ -1251,20 +1244,19 @@ def render_priority_table(height: int = 225) -> None:
         category_col,
         "총판매율",
         "GAP",
+        "재고",
         "문제원인",
-        "상태",
         "추천액션",
-        "가격 조정 어드바이스",
     ]:
         if col and col in filter_df.columns and col not in cols:
             cols.append(col)
 
-    view = filter_df.sort_values("GAP").head(18)[cols].copy()
+    view = filter_df.sort_values(["GAP", "재고"], ascending=[True, False]).head(18)[cols].copy()
     render_html_table(
         view,
         "AI 우선 발견사항",
-        "GAP 기준 상위 18개",
-        [20, 10, 7, 7, 7, 14, 9, 10, 16][:len(cols)],
+        "GAP 기준 상위 18개 · 하나의 우선 액션만 제시",
+        [21, 11, 8, 8, 8, 8, 18, 18][:len(cols)],
     )
 
 
@@ -1284,35 +1276,20 @@ def render_priority_compact_table(limit: int = 15) -> None:
 
     rows = []
     for _, row in priority.iterrows():
-        status = str(row.get("상태", ""))
         action = str(row.get("추천액션", ""))
-        price_advice = str(row.get("가격 조정 어드바이스", ""))
 
-        if "판매부진" in status:
-            status_cls = "badge-red"
-        elif "주의" in status:
-            status_cls = "badge-amber"
-        else:
-            status_cls = "badge-green"
-
-        if "점출" in action or "배분" in action:
-            action_cls = "badge-blue"
-        elif "관찰" in action:
+        if "2차" in action:
+            action_cls = "badge-red"
+        elif "1차" in action:
             action_cls = "badge-amber"
+        elif "점 이동" in action:
+            action_cls = "badge-blue"
         else:
             action_cls = "badge-green"
 
-        if "강한" in price_advice:
-            price_cls = "badge-red"
-        elif "추가" in price_advice or "1차" in price_advice:
-            price_cls = "badge-amber"
-        elif "프로모션" in price_advice:
-            price_cls = "badge-purple"
-        else:
-            price_cls = "badge-green"
-
         sell_rate = float(row.get("총판매율", 0))
         gap = float(row.get("GAP", 0))
+        stock = int(round(float(row.get("재고", 0))))
         brand_name = esc(row.get(brand_view_col, "-")) if brand_view_col else "-"
 
         rows.append(
@@ -1323,10 +1300,9 @@ def render_priority_compact_table(limit: int = 15) -> None:
                     <td title="{brand_name}">{brand_name}</td>
                     <td class="num">{sell_rate:.1f}%</td>
                     <td class="num {'negative' if gap < 0 else ''}">{gap:.1f}%p</td>
+                    <td class="num">{stock:,}</td>
                     <td class="reason-cell" title="{esc(row.get('문제원인', '-'))}">{esc(row.get('문제원인', '-'))}</td>
-                    <td><span class="badge {status_cls}">{esc(status)}</span></td>
                     <td><span class="badge {action_cls}">{esc(action)}</span></td>
-                    <td><span class="badge {price_cls}">{esc(price_advice)}</span></td>
                 </tr>
                 """
             ).strip()
@@ -1338,20 +1314,19 @@ def render_priority_compact_table(limit: int = 15) -> None:
         <div class="table-head">
             <div>
                 <span class="table-title">AI 우선 조치 TOP {limit}</span>
-                <span class="table-meta">GAP 및 재고 위험도 기준 · 가격 조정은 총판매율 기반 참고 의견</span>
+                <span class="table-meta">GAP 및 재고 위험도 기준 · 상품별 하나의 우선 액션 제시</span>
             </div>
             <div class="table-link">상세 진단 메뉴에서 전체 보기</div>
         </div>
         <table class="compact-table">
             <colgroup>
-                <col style="width:21%">
-                <col style="width:10%">
-                <col style="width:7%">
-                <col style="width:7%">
-                <col style="width:17%">
-                <col style="width:10%">
-                <col style="width:12%">
-                <col style="width:16%">
+                <col style="width:23%">
+                <col style="width:11%">
+                <col style="width:8%">
+                <col style="width:8%">
+                <col style="width:8%">
+                <col style="width:22%">
+                <col style="width:20%">
             </colgroup>
             <thead>
                 <tr>
@@ -1359,10 +1334,9 @@ def render_priority_compact_table(limit: int = 15) -> None:
                     <th>브랜드</th>
                     <th style="text-align:right">판매율</th>
                     <th style="text-align:right">GAP</th>
+                    <th style="text-align:right">재고</th>
                     <th>문제 원인</th>
-                    <th>상태</th>
                     <th>추천 액션</th>
-                    <th>가격 조정 어드바이스</th>
                 </tr>
             </thead>
             <tbody>
@@ -1388,19 +1362,17 @@ def render_full_table(height: int = 330) -> None:
         "총판매율",
         "GAP",
         "문제원인",
-        "상태",
         "추천액션",
-        "가격 조정 어드바이스",
     ]:
         if col and col in filter_df.columns and col not in cols:
             cols.append(col)
 
-    view = filter_df[cols].sort_values("GAP").copy()
-    widths = [7, 15, 6, 8, 5, 5, 5, 7, 7, 9, 6, 7, 13]
+    view = filter_df[cols].sort_values(["GAP", "재고"], ascending=[True, False]).copy()
+    widths = [8, 17, 7, 9, 6, 6, 6, 8, 8, 12, 13]
     render_html_table(
         view,
         "상품 전체 진단",
-        f"총 {len(view):,}개 상품 · 페이지 스크롤로 전체 확인",
+        f"총 {len(view):,}개 상품 · GAP에 따라 단일 우선 액션 제시",
         widths[:len(cols)],
     )
 
@@ -1558,6 +1530,7 @@ elif selected_menu == "AI 액션":
 else:
     render_kpis()
     render_full_table(520)
+
 
 
 
