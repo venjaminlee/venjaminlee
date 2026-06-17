@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import html
 from io import BytesIO
 
 import pandas as pd
@@ -61,14 +62,14 @@ st.markdown(
 
     .block-container {{
         max-width: 100% !important;
-        padding-top: 0.55rem !important;
-        padding-bottom: 0.8rem !important;
-        padding-left: 1.0rem !important;
-        padding-right: 1.0rem !important;
+        padding-top: 0.38rem !important;
+        padding-bottom: 0.55rem !important;
+        padding-left: 0.85rem !important;
+        padding-right: 0.85rem !important;
     }}
 
     section[data-testid="stSidebar"] {{
-        width: 172px !important;
+        width: 154px !important;
         background: linear-gradient(180deg, #101827 0%, #17233A 100%) !important;
         border-right: 0 !important;
     }}
@@ -130,7 +131,7 @@ st.markdown(
     }}
 
     div[data-testid="stDataFrame"] * {{
-        font-size: 10px !important;
+        font-size: 9px !important;
     }}
 
     [data-testid="stPlotlyChart"] {{
@@ -146,42 +147,42 @@ st.markdown(
     }}
 
     .hero {{
-        background: linear-gradient(135deg, #101827 0%, #1C3470 55%, #2D63D8 100%);
+        background: linear-gradient(135deg, #101827 0%, #1C3470 58%, #2D63D8 100%);
         color: white;
-        border-radius: 18px;
-        padding: 14px 17px;
-        margin-bottom: 8px;
-        box-shadow: 0 12px 28px rgba(17, 24, 39, 0.18);
+        border-radius: 14px;
+        padding: 10px 14px;
+        margin-bottom: 6px;
+        box-shadow: 0 7px 18px rgba(17, 24, 39, 0.14);
     }}
 
     .hero-title {{
-        font-size: 21px;
+        font-size: 18px;
         font-weight: 850;
         letter-spacing: -0.035em;
         line-height: 1.2;
     }}
 
     .hero-sub {{
-        font-size: 10.5px;
+        font-size: 9px;
         color: #D8E2F5;
         margin-top: 4px;
     }}
 
     .section-label {{
-        font-size: 12px;
+        font-size: 11px;
         font-weight: 850;
         color: #1F2937;
         letter-spacing: -0.02em;
-        margin: 4px 0 5px 1px;
+        margin: 3px 0 4px 1px;
     }}
 
     .kpi-card {{
         background: #FFFFFF;
         border: 1px solid #E6E9EF;
-        border-radius: 15px;
-        padding: 9px 11px;
-        min-height: 70px;
-        box-shadow: 0 7px 18px rgba(15, 23, 42, 0.055);
+        border-radius: 12px;
+        padding: 7px 9px;
+        min-height: 60px;
+        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.045);
     }}
 
     .kpi-top {{
@@ -192,57 +193,57 @@ st.markdown(
     }}
 
     .kpi-icon {{
-        width: 24px;
-        height: 24px;
-        border-radius: 8px;
+        width: 21px;
+        height: 21px;
+        border-radius: 7px;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 13px;
+        font-size: 11px;
     }}
 
     .kpi-label {{
-        font-size: 9.5px;
+        font-size: 8.8px;
         color: #6B7280;
     }}
 
     .kpi-value {{
-        font-size: 20px;
+        font-size: 18px;
         line-height: 1.05;
         font-weight: 850;
         color: #111827;
     }}
 
     .kpi-sub {{
-        font-size: 8.8px;
+        font-size: 8px;
         color: #9CA3AF;
         margin-top: 3px;
     }}
 
     .insight-card {{
-        border-radius: 14px;
-        padding: 10px 11px;
-        min-height: 88px;
+        border-radius: 12px;
+        padding: 8px 9px;
+        min-height: 72px;
         border: 1px solid #E7EAF0;
         box-shadow: 0 6px 16px rgba(15, 23, 42, 0.045);
     }}
 
     .insight-title {{
-        font-size: 9.5px;
+        font-size: 8.8px;
         font-weight: 800;
         color: #4B5563;
         margin-bottom: 5px;
     }}
 
     .insight-value {{
-        font-size: 19px;
+        font-size: 16.5px;
         font-weight: 850;
         color: #111827;
         line-height: 1.1;
     }}
 
     .insight-desc {{
-        font-size: 9px;
+        font-size: 8.3px;
         color: #6B7280;
         line-height: 1.35;
         margin-top: 4px;
@@ -251,9 +252,9 @@ st.markdown(
     .action-card {{
         background: #FFFFFF;
         border: 1px solid #E7EAF0;
-        border-radius: 14px;
-        padding: 10px 11px;
-        min-height: 84px;
+        border-radius: 12px;
+        padding: 8px 9px;
+        min-height: 70px;
         box-shadow: 0 6px 16px rgba(15, 23, 42, 0.045);
     }}
 
@@ -264,20 +265,20 @@ st.markdown(
     }}
 
     .action-title {{
-        font-size: 9.8px;
+        font-size: 9px;
         color: #4B5563;
         font-weight: 800;
     }}
 
     .action-value {{
-        font-size: 19px;
+        font-size: 16.5px;
         font-weight: 850;
         color: #111827;
         margin-top: 2px;
     }}
 
     .action-desc {{
-        font-size: 9px;
+        font-size: 8.3px;
         color: #6B7280;
         line-height: 1.35;
         margin-top: 3px;
@@ -299,6 +300,109 @@ st.markdown(
         margin-top: -2px;
         margin-bottom: 5px;
     }}
+
+    .table-card {{
+        background: #FFFFFF;
+        border: 1px solid #E7EAF0;
+        border-radius: 13px;
+        padding: 9px 10px 7px 10px;
+        box-shadow: 0 5px 15px rgba(15, 23, 42, 0.045);
+        margin-top: 2px;
+    }}
+
+    .table-head {{
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 6px;
+    }}
+
+    .table-title {{
+        font-size: 11px;
+        font-weight: 850;
+        color: #1F2937;
+    }}
+
+    .table-meta {{
+        font-size: 8px;
+        color: #8A94A6;
+        margin-left: 6px;
+    }}
+
+    .table-link {{
+        font-size: 8.3px;
+        color: #356AE6;
+        font-weight: 700;
+    }}
+
+    .compact-table {{
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0;
+        table-layout: fixed;
+        font-size: 8.5px;
+        color: #374151;
+    }}
+
+    .compact-table th {{
+        background: #F6F8FB;
+        color: #6B7280;
+        font-weight: 800;
+        padding: 5px 6px;
+        border-top: 1px solid #E7EAF0;
+        border-bottom: 1px solid #E7EAF0;
+        text-align: left;
+        white-space: nowrap;
+    }}
+
+    .compact-table th:first-child {{
+        border-left: 1px solid #E7EAF0;
+        border-top-left-radius: 8px;
+    }}
+
+    .compact-table th:last-child {{
+        border-right: 1px solid #E7EAF0;
+        border-top-right-radius: 8px;
+    }}
+
+    .compact-table td {{
+        height: 24px;
+        padding: 4px 6px;
+        border-bottom: 1px solid #EEF1F5;
+        background: #FFFFFF;
+        vertical-align: middle;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }}
+
+    .compact-table tbody tr:hover td {{
+        background: #F8FAFD;
+    }}
+
+    .compact-table .num {{
+        text-align: right;
+        font-variant-numeric: tabular-nums;
+    }}
+
+    .compact-table .negative {{
+        color: #C24158;
+        font-weight: 800;
+    }}
+
+    .badge {{
+        display: inline-block;
+        padding: 2px 6px;
+        border-radius: 999px;
+        font-size: 7.8px;
+        font-weight: 800;
+        line-height: 1.2;
+    }}
+
+    .badge-red {{ background: #FFF0F2; color: #C24158; }}
+    .badge-amber {{ background: #FFF7E6; color: #B45309; }}
+    .badge-blue {{ background: #EDF4FF; color: #2859B8; }}
+    .badge-green {{ background: #ECF8F4; color: #0F766E; }}
 
     .stTabs [data-baseweb="tab-list"] {{
         gap: 5px;
@@ -872,14 +976,72 @@ def render_insight_cards() -> None:
 
 
 def render_brand_store_charts() -> None:
-    st.markdown('<div class="section-label">Brand / Store Intelligence</div>', unsafe_allow_html=True)
-    left, right = st.columns(2)
+    st.markdown('<div class="section-label">Portfolio Snapshot</div>', unsafe_allow_html=True)
+    donut_area, brand_area, store_area = st.columns([0.82, 1.18, 1.18])
 
-    with left:
+    with donut_area:
         with st.container(border=True):
-            st.subheader("브랜드별 판매율 TOP 8")
+            st.subheader("상품 상태 분포")
+
+            status_df = pd.DataFrame(
+                {
+                    "상태": ["정상", "주의", "판매부진"],
+                    "상품수": [
+                        int(filter_df["상태"].astype(str).str.contains("정상").sum()),
+                        int(filter_df["상태"].astype(str).str.contains("주의").sum()),
+                        int(filter_df["상태"].astype(str).str.contains("판매부진").sum()),
+                    ],
+                }
+            )
+            status_df = status_df[status_df["상품수"] > 0]
+
+            fig = px.pie(
+                status_df,
+                names="상태",
+                values="상품수",
+                hole=0.70,
+                color="상태",
+                color_discrete_map={
+                    "정상": "#356AE6",
+                    "주의": "#D9A441",
+                    "판매부진": "#D95B70",
+                },
+            )
+            fig.update_traces(
+                textinfo="percent",
+                textfont_size=9,
+                marker=dict(line=dict(color="#FFFFFF", width=2)),
+                hovertemplate="%{label}<br>%{value}개 · %{percent}<extra></extra>",
+            )
+            fig.add_annotation(
+                text=f"<b>{len(filter_df):,}</b><br><span style='font-size:8px;color:#8A94A6'>관리상품</span>",
+                x=0.5,
+                y=0.5,
+                showarrow=False,
+                font=dict(size=17, color="#111827"),
+            )
+            fig.update_layout(
+                height=190,
+                margin=dict(l=0, r=0, t=2, b=12),
+                paper_bgcolor="rgba(0,0,0,0)",
+                plot_bgcolor="rgba(0,0,0,0)",
+                legend=dict(
+                    orientation="h",
+                    y=-0.08,
+                    x=0.5,
+                    xanchor="center",
+                    font=dict(size=8, color="#6B7280"),
+                    itemwidth=34,
+                ),
+                showlegend=True,
+            )
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+    with brand_area:
+        with st.container(border=True):
+            st.subheader("브랜드별 판매율 TOP 6")
             if not brand_perf.empty:
-                top = brand_perf.sort_values("판매율", ascending=False).head(8)
+                top = brand_perf.sort_values("판매율", ascending=False).head(6)
                 fig = px.bar(
                     top,
                     x="판매율",
@@ -888,18 +1050,31 @@ def render_brand_store_charts() -> None:
                     text="판매율",
                     color_discrete_sequence=[BLUE],
                 )
-                fig.update_traces(textposition="outside", marker_line_width=0)
+                fig.update_traces(
+                    textposition="outside",
+                    textfont_size=8,
+                    marker_line_width=0,
+                    cliponaxis=False,
+                )
                 fig.update_yaxes(autorange="reversed")
-                style_plot(fig, 215)
+                fig.add_vline(
+                    x=target_rate,
+                    line_dash="dot",
+                    line_color="#C9CFDA",
+                    annotation_text="목표",
+                    annotation_font_size=7,
+                    annotation_font_color="#8A94A6",
+                )
+                style_plot(fig, 190)
                 st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
             else:
                 st.info("브랜드 컬럼을 찾을 수 없습니다.")
 
-    with right:
+    with store_area:
         with st.container(border=True):
-            st.subheader("점포별 판매율 TOP 8")
+            st.subheader("점포별 판매율 TOP 6")
             if not store_perf_summary.empty:
-                top = store_perf_summary.sort_values("판매율", ascending=False).head(8)
+                top = store_perf_summary.sort_values("판매율", ascending=False).head(6)
                 fig = px.bar(
                     top,
                     x="판매율",
@@ -908,9 +1083,22 @@ def render_brand_store_charts() -> None:
                     text="판매율",
                     color_discrete_sequence=[GREEN],
                 )
-                fig.update_traces(textposition="outside", marker_line_width=0)
+                fig.update_traces(
+                    textposition="outside",
+                    textfont_size=8,
+                    marker_line_width=0,
+                    cliponaxis=False,
+                )
                 fig.update_yaxes(autorange="reversed")
-                style_plot(fig, 215)
+                fig.add_vline(
+                    x=target_rate,
+                    line_dash="dot",
+                    line_color="#C9CFDA",
+                    annotation_text="목표",
+                    annotation_font_size=7,
+                    annotation_font_color="#8A94A6",
+                )
+                style_plot(fig, 190)
                 st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
             else:
                 st.info("점포 분석을 위한 컬럼을 찾을 수 없습니다.")
@@ -927,7 +1115,7 @@ def render_action_cards() -> None:
         action_card("창고 배분 추천", f"{len(allocation)}건", "창고 재고를 판매 우수 점포 중심으로 배분", GREEN)
 
 
-def render_priority_table(height: int = 245) -> None:
+def render_priority_table(height: int = 225) -> None:
     cols = []
     for col in [style_name_col, brand_col, category_col, "총판매율", "GAP", "문제원인", "상태", "추천액션"]:
         if col and col in filter_df.columns and col not in cols:
@@ -939,6 +1127,96 @@ def render_priority_table(height: int = 245) -> None:
         height=height,
         hide_index=True,
     )
+
+
+def render_priority_compact_table(limit: int = 8) -> None:
+    product_col = style_name_col if style_name_col and style_name_col in filter_df.columns else style_col
+    brand_view_col = brand_col if brand_col and brand_col in filter_df.columns else None
+
+    priority = filter_df.sort_values(
+        ["GAP", "재고"],
+        ascending=[True, False],
+    ).head(limit)
+
+    def esc(value) -> str:
+        if pd.isna(value):
+            return "-"
+        return html.escape(str(value))
+
+    rows = []
+    for _, row in priority.iterrows():
+        status = str(row.get("상태", ""))
+        action = str(row.get("추천액션", ""))
+
+        if "판매부진" in status:
+            status_cls = "badge-red"
+        elif "주의" in status:
+            status_cls = "badge-amber"
+        else:
+            status_cls = "badge-green"
+
+        if "점출" in action or "배분" in action:
+            action_cls = "badge-blue"
+        elif "관찰" in action:
+            action_cls = "badge-amber"
+        else:
+            action_cls = "badge-green"
+
+        sell_rate = float(row.get("총판매율", 0))
+        gap = float(row.get("GAP", 0))
+        brand_name = esc(row.get(brand_view_col, "-")) if brand_view_col else "-"
+
+        rows.append(
+            f"""
+            <tr>
+                <td class="product-cell" title="{esc(row.get(product_col, '-'))}">{esc(row.get(product_col, '-'))}</td>
+                <td title="{brand_name}">{brand_name}</td>
+                <td class="num">{sell_rate:.1f}%</td>
+                <td class="num {'negative' if gap < 0 else ''}">{gap:.1f}%p</td>
+                <td class="reason-cell" title="{esc(row.get('문제원인', '-'))}">{esc(row.get('문제원인', '-'))}</td>
+                <td><span class="badge {status_cls}">{esc(status)}</span></td>
+                <td><span class="badge {action_cls}">{esc(action)}</span></td>
+            </tr>
+            """
+        )
+
+    table_html = f"""
+    <div class="table-card">
+        <div class="table-head">
+            <div>
+                <span class="table-title">AI 우선 조치 TOP {limit}</span>
+                <span class="table-meta">GAP 및 재고 위험도 기준</span>
+            </div>
+            <div class="table-link">상세 진단 메뉴에서 전체 보기</div>
+        </div>
+        <table class="compact-table">
+            <colgroup>
+                <col style="width:24%">
+                <col style="width:12%">
+                <col style="width:8%">
+                <col style="width:8%">
+                <col style="width:20%">
+                <col style="width:13%">
+                <col style="width:15%">
+            </colgroup>
+            <thead>
+                <tr>
+                    <th>상품명</th>
+                    <th>브랜드</th>
+                    <th style="text-align:right">판매율</th>
+                    <th style="text-align:right">GAP</th>
+                    <th>문제 원인</th>
+                    <th>상태</th>
+                    <th>추천 액션</th>
+                </tr>
+            </thead>
+            <tbody>
+                {''.join(rows)}
+            </tbody>
+        </table>
+    </div>
+    """
+    st.markdown(table_html, unsafe_allow_html=True)
 
 
 def render_full_table(height: int = 330) -> None:
@@ -979,17 +1257,7 @@ if selected_menu == "대시보드":
     render_insight_cards()
     render_brand_store_charts()
     render_action_cards()
-
-    tabs = st.tabs(["AI 우선 조치", "점출 추천", "상세 진단"])
-    with tabs[0]:
-        render_priority_table(235)
-    with tabs[1]:
-        if not rec_df.empty:
-            st.dataframe(rec_df.head(20), use_container_width=True, height=235, hide_index=True)
-        else:
-            st.info("현재 조건에 해당하는 점출/점입 추천 항목이 없습니다.")
-    with tabs[2]:
-        render_full_table(260)
+    render_priority_compact_table(8)
 
 elif selected_menu == "브랜드 · 점포":
     render_kpis()
@@ -1102,3 +1370,4 @@ else:
     with st.container(border=True):
         st.subheader("상품 전체 진단")
         render_full_table(520)
+
