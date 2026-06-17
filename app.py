@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import html
+import textwrap
 from io import BytesIO
 
 import pandas as pd
@@ -1167,21 +1168,24 @@ def render_priority_compact_table(limit: int = 8) -> None:
         brand_name = esc(row.get(brand_view_col, "-")) if brand_view_col else "-"
 
         rows.append(
-            f"""
-            <tr>
-                <td class="product-cell" title="{esc(row.get(product_col, '-'))}">{esc(row.get(product_col, '-'))}</td>
-                <td title="{brand_name}">{brand_name}</td>
-                <td class="num">{sell_rate:.1f}%</td>
-                <td class="num {'negative' if gap < 0 else ''}">{gap:.1f}%p</td>
-                <td class="reason-cell" title="{esc(row.get('문제원인', '-'))}">{esc(row.get('문제원인', '-'))}</td>
-                <td><span class="badge {status_cls}">{esc(status)}</span></td>
-                <td><span class="badge {action_cls}">{esc(action)}</span></td>
-            </tr>
-            """
+            textwrap.dedent(
+                f"""
+                <tr>
+                    <td class="product-cell" title="{esc(row.get(product_col, '-'))}">{esc(row.get(product_col, '-'))}</td>
+                    <td title="{brand_name}">{brand_name}</td>
+                    <td class="num">{sell_rate:.1f}%</td>
+                    <td class="num {'negative' if gap < 0 else ''}">{gap:.1f}%p</td>
+                    <td class="reason-cell" title="{esc(row.get('문제원인', '-'))}">{esc(row.get('문제원인', '-'))}</td>
+                    <td><span class="badge {status_cls}">{esc(status)}</span></td>
+                    <td><span class="badge {action_cls}">{esc(action)}</span></td>
+                </tr>
+                """
+            ).strip()
         )
 
-    table_html = f"""
-    <div class="table-card">
+    table_html = textwrap.dedent(
+        f"""
+        <div class="table-card">
         <div class="table-head">
             <div>
                 <span class="table-title">AI 우선 조치 TOP {limit}</span>
@@ -1213,9 +1217,10 @@ def render_priority_compact_table(limit: int = 8) -> None:
             <tbody>
                 {''.join(rows)}
             </tbody>
-        </table>
-    </div>
-    """
+            </table>
+        </div>
+        """
+    ).strip()
     st.markdown(table_html, unsafe_allow_html=True)
 
 
@@ -1370,4 +1375,5 @@ else:
     with st.container(border=True):
         st.subheader("상품 전체 진단")
         render_full_table(520)
+
 
