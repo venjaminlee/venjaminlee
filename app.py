@@ -395,6 +395,122 @@ if inventory_file and summary_file and sales_file:
     )
 
     st.divider()
+        # ======================
+    # 브랜드 현황 + 점포 현황
+    # ======================
+
+    st.markdown("### 브랜드 / 점포 운영 현황")
+
+    brand_col_area, store_col_area = st.columns(2)
+
+    with brand_col_area:
+        st.subheader("브랜드별 판매율 TOP 10")
+
+        if brand_col and brand_col in diagnosis.columns:
+            brand_perf = diagnosis.groupby(brand_col).agg({
+                "판매": "sum",
+                "재고": "sum",
+                style_col: "nunique"
+            }).reset_index()
+
+            brand_perf["판매율"] = brand_perf.apply(
+                lambda x: x["판매"] / (x["판매"] + x["재고"]) * 100
+                if (x["판매"] + x["재고"]) > 0 else 0,
+                axis=1
+            ).round(1)
+
+            brand_perf = brand_perf.sort_values("판매율", ascending=False).head(10)
+
+            fig_brand = px.bar(
+                brand_perf,
+                x="판매율",
+                y=brand_col,
+                orientation="h",
+                text="판매율",
+                title=None
+            )
+
+            fig_brand.update_traces(textposition="outside")
+
+            fig_brand.update_layout(
+                height=300,
+                margin=dict(l=10, r=20, t=10, b=10),
+                xaxis_title="판매율(%)",
+                yaxis_title="",
+                showlegend=False,
+                yaxis=dict(autorange="reversed")
+            )
+
+            st.plotly_chart(fig_brand, use_container_width=True)
+
+        else:
+            st.info("브랜드 컬럼을 찾을 수 없습니다.")
+
+    with store_col_area:
+        st.subheader("점포별 판매율 TOP 10")
+
+        if inv_style_col and inv_store_col and sales_style_col and sales_store_col and sales_qty_col:
+            store_stock = inventory.copy()
+            store_sales = sales.copy()
+
+            if inv_type_col:
+                store_stock_only = store_stock[
+                    ~store_stock[inv_type_col].astype(str).str.contains("창고", na=False)
+                ].copy()
+            else:
+                store_stock_only = store_stock.copy()
+
+            stock_by_store = store_stock_only.groupby(inv_store_col)[inv_stock_col].sum().reset_index()
+            sales_by_store = store_sales.groupby(sales_store_col)[sales_qty_col].sum().reset_index()
+
+            stock_by_store.columns = ["점포명", "재고"]
+            sales_by_store.columns = ["점포명", "판매"]
+
+            store_perf_summary = pd.merge(
+                stock_by_store,
+                sales_by_store,
+                on="점포명",
+                how="left"
+            )
+
+            store_perf_summary["판매"] = store_perf_summary["판매"].fillna(0)
+            store_perf_summary["판매율"] = store_perf_summary.apply(
+                lambda x: x["판매"] / (x["판매"] + x["재고"]) * 100
+                if (x["판매"] + x["재고"]) > 0 else 0,
+                axis=1
+            ).round(1)
+
+            store_perf_top = store_perf_summary.sort_values(
+                "판매율",
+                ascending=False
+            ).head(10)
+
+            fig_store = px.bar(
+                store_perf_top,
+                x="판매율",
+                y="점포명",
+                orientation="h",
+                text="판매율",
+                title=None
+            )
+
+            fig_store.update_traces(textposition="outside")
+
+            fig_store.update_layout(
+                height=300,
+                margin=dict(l=10, r=20, t=10, b=10),
+                xaxis_title="판매율(%)",
+                yaxis_title="",
+                showlegend=False,
+                yaxis=dict(autorange="reversed")
+            )
+
+            st.plotly_chart(fig_store, use_container_width=True)
+
+        else:
+            st.info("점포 분석을 위한 재고/판매 컬럼을 찾을 수 없습니다.")
+
+    st.divider()
     # ======================
     # 브랜드 현황 + 점포 현황
     # ======================
