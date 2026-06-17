@@ -10,7 +10,7 @@ import streamlit as st
 
 
 # =========================================================
-# VERSION: V37 - simplified colors/data + GAP-based single action
+# VERSION: V38 - separate dashboard metrics, insight causes, and action guidance
 # PAGE CONFIG
 # =========================================================
 
@@ -853,8 +853,9 @@ with st.sidebar:
             ]
 
 # Summary KPI
-total_sales = float(summary[sum_sales_col].sum())
-total_stock = float(summary[sum_stock_col].sum())
+# Executive Dashboard shows only current operating facts.
+total_sales = float(filter_df["판매"].sum())
+total_stock = float(filter_df["재고"].sum())
 sell_through = (
     total_sales / (total_sales + total_stock) * 100
     if (total_sales + total_stock) > 0
@@ -1060,40 +1061,86 @@ if category_col:
 def render_kpis() -> None:
     st.markdown('<div class="section-label">Executive Dashboard</div>', unsafe_allow_html=True)
     c1, c2, c3, c4 = st.columns(4)
+
     with c1:
-        kpi_card("↗", "판매율", f"{sell_through:.1f}%", "전체 누계 판매 기준", "#E9F0FF")
+        kpi_card(
+            "↗",
+            "판매율",
+            f"{sell_through:.1f}%",
+            "선택 조건의 누계 판매 기준",
+            "#E9F0FF",
+        )
+
     with c2:
-        kpi_card("±", "목표 대비 GAP", f"{gap_to_target:.1f}%p", f"목표 판매율 {target_rate}%", "#F3F4F6")
+        kpi_card(
+            "✓",
+            "누계 판매수량",
+            f"{int(round(total_sales)):,}",
+            "선택 조건의 판매 합계",
+            "#ECF8F4",
+        )
+
     with c3:
-        kpi_card("!", "최우선 관리", f"{risk_count:,}", "2차 가격 조정 검토", "#FFF1F2")
+        kpi_card(
+            "□",
+            "현재 재고수량",
+            f"{int(round(total_stock)):,}",
+            "선택 조건의 재고 합계",
+            "#FFF7E8",
+        )
+
     with c4:
-        kpi_card("#", "관리 상품", f"{len(filter_df):,}", "분석 대상", "#F1ECFF")
+        kpi_card(
+            "#",
+            "분석 상품수",
+            f"{len(filter_df):,}",
+            "현재 필터의 분석 대상",
+            "#F1ECFF",
+        )
 
 
 def render_insight_cards() -> None:
     st.markdown('<div class="section-label">AI Insight</div>', unsafe_allow_html=True)
+
+    reason_desc = {
+        "목표 미달 + 재고 과다": "판매 회복과 재고 소진을 함께 검토해야 하는 상품입니다.",
+        "목표 대비 판매 부진": "목표 판매율 대비 판매 속도가 부족한 상품입니다.",
+        "재고 과다": "판매수량 대비 보유 재고가 높은 상품입니다.",
+        "판매 저조": "총판매율이 낮아 추가 관찰이 필요한 상품입니다.",
+        "시즌 경과 체화 우려": "경과 기간 대비 재고 소진 속도가 느린 상품입니다.",
+    }
+
+    reason_counts = (
+        filter_df.loc[filter_df["문제원인"] != "정상 범위", "문제원인"]
+        .value_counts()
+        .head(3)
+    )
+
+    insight_items = []
+    for reason, count in reason_counts.items():
+        insight_items.append(
+            (
+                str(reason),
+                f"{int(count)}개",
+                reason_desc.get(str(reason), "우선 확인이 필요한 문제 유형입니다."),
+            )
+        )
+
+    while len(insight_items) < 3:
+        insight_items.append(
+            (
+                "추가 주요 이슈 없음",
+                "0개",
+                "현재 필터에서 추가로 두드러지는 문제 유형이 없습니다.",
+            )
+        )
+
+    accents = [RED, AMBER, BLUE]
     cols = st.columns(3)
-    with cols[0]:
-        insight_card(
-            "평균 GAP",
-            f"{avg_gap:.1f}%p",
-            "조치 대상 상품의 평균 목표 대비 부족폭입니다.",
-            AMBER,
-        )
-    with cols[1]:
-        insight_card(
-            "과재고 의심",
-            f"{stock_bad}개",
-            "판매수량 대비 재고가 두 배를 초과한 상품입니다.",
-            BLUE,
-        )
-    with cols[2]:
-        insight_card(
-            "검토 대상 감소",
-            f"{review_reduction:.0f}%",
-            "전수 검토 대비 우선 점검 대상을 줄였습니다.",
-            GREEN,
-        )
+
+    for col, (title, value, desc), accent in zip(cols, insight_items[:3], accents):
+        with col:
+            insight_card(title, value, desc, accent)
 
 
 def render_brand_store_charts() -> None:
@@ -1226,10 +1273,10 @@ def render_brand_store_charts() -> None:
 
 
 def render_action_cards() -> None:
-    st.markdown('<div class="section-label">AI Action Recommendations</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-label">AI Action</div>', unsafe_allow_html=True)
     a1, a2, a3 = st.columns(3)
     with a1:
-        action_card("우선 조치 상품", f"{action_count}개", "목표 대비 부족폭이 큰 상품부터 우선 점검", RED)
+        action_card("우선 조치 대상", f"{action_count}개", "유지·모니터링을 제외한 실행 검토 대상", RED)
     with a2:
         action_card("점출 / 점입 추천", f"{len(rec_df)}건", "재고 과다 점포에서 판매 우수 점포로 이동", BLUE)
     with a3:
@@ -1530,6 +1577,7 @@ elif selected_menu == "AI 액션":
 else:
     render_kpis()
     render_full_table(520)
+
 
 
 
