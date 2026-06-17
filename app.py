@@ -10,7 +10,7 @@ import streamlit as st
 
 
 # =========================================================
-# VERSION: V35 - TOP 15 priority table + sell-through-based price advice
+# VERSION: V35.1 - fix top header overlap + TOP 15 price advice
 # PAGE CONFIG
 # =========================================================
 
@@ -64,7 +64,8 @@ st.markdown(
 
     .block-container {{
         max-width: 100% !important;
-        padding-top: 0.38rem !important;
+        /* Streamlit fixed top toolbar height reserved so the hero is not hidden */
+        padding-top: 3.75rem !important;
         padding-bottom: 0.55rem !important;
         padding-left: 0.85rem !important;
         padding-right: 0.85rem !important;
@@ -159,6 +160,7 @@ st.markdown(
         color: white;
         border-radius: 16px;
         padding: 15px 19px;
+        margin-top: 2px;
         margin-bottom: 9px;
         box-shadow: 0 9px 22px rgba(17, 24, 39, 0.16);
     }}
@@ -1556,6 +1558,7 @@ elif selected_menu == "AI 액션":
 else:
     render_kpis()
     render_full_table(520)
+
 
 
 
