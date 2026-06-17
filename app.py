@@ -308,6 +308,22 @@ if inventory_file and summary_file and sales_file:
     else:
         action_comment = "AI 분석 결과, 즉시 조치가 필요한 상품은 없습니다."
 
+    recommended_actions = []
+
+    if action_count > 0:
+        recommended_actions.append(f"① 관리 필요 상품 {action_count}개 우선 점검")
+
+    if sell_through < target_rate:
+        recommended_actions.append("② 판매 부진 상품 점출/배분 검토")
+
+    if stock_bad > 0:
+        recommended_actions.append(f"③ 체화 위험 상품 {stock_bad}개 할인 검토")
+
+    if len(recommended_actions) == 0:
+        recommended_actions.append("현재 즉시 조치가 필요한 항목은 없습니다.")
+
+    action_text = "<br>".join(recommended_actions)
+
     ai_card_html = f"""
     <div style="
         background-color:#F8FAFC;
@@ -322,20 +338,20 @@ if inventory_file and summary_file and sales_file:
         <div style="font-size:13px; line-height:1.7; color:#374151;">
             {sales_comment}<br>
             {action_comment}<br>
-            재고 과다 및 판매 부진 상품을 중심으로 점출/배분 검토가 필요합니다.
+            재고 과다 및 판매 부진 상품을 중심으로 관리가 필요합니다.
         </div>
         <div style="
-            margin-top:10px;
-            padding:10px;
+            margin-top:12px;
+            padding:12px;
             background-color:#FFFFFF;
             border-radius:10px;
-            font-size:12px;
+            border:1px solid #E5E7EB;
+            font-size:13px;
+            line-height:1.8;
             color:#111827;
         ">
-            <b>추천 액션</b><br>
-            • 관리 필요 상품 우선 확인<br>
-            • 재고 과다 점포 → 판매 우수 점포 점출 검토<br>
-            • 목표 미달 카테고리 중심 모니터링
+            <b>AI 추천 액션</b><br>
+            {action_text}
         </div>
     </div>
     """
