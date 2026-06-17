@@ -396,168 +396,133 @@ if inventory_file and summary_file and sales_file:
 
     st.divider()
     # ======================
-    # 상품 진단 TOP + 카테고리
+    # 브랜드 현황 + 점포 현황
     # ======================
 
-    left, right = st.columns([1.2, 0.8])
+    st.markdown("### 브랜드 / 점포 운영 현황")
 
-    with left:
-        st.subheader("AI 우선 조치 대상 상품")
-        st.markdown("<div class='small-note'>목표 대비 부족폭이 큰 상품부터 우선 점검</div>", unsafe_allow_html=True)
+    brand_col_area, store_col_area = st.columns(2)
 
-        # AI 우선 조치 요약 카드
-        top_action_df = filter_df[
-            filter_df["추천액션"].astype(str).str.contains("점출|할인|배분")
-        ].copy()
+    with brand_col_area:
+        st.subheader("브랜드별 판매율 TOP 10")
 
-        avg_gap = (
-            top_action_df["GAP"].mean()
-            if not top_action_df.empty else 0
-        )
-
-        overstock_count = top_action_df[
-            top_action_df["재고"] > top_action_df["판매"] * 2
-        ].shape[0] if not top_action_df.empty else 0
-
-        summary_cols = st.columns(3)
-
-        with summary_cols[0]:
-            st.markdown(f"""
-            <div style="
-                background:#FEF2F2;
-                border:1px solid #FECACA;
-                border-radius:12px;
-                padding:10px 12px;
-                min-height:74px;
-            ">
-                <div style="font-size:11px; color:#991B1B;">🔴 관리 필요</div>
-                <div style="font-size:20px; font-weight:800; color:#7F1D1D;">
-                    {top_action_df.shape[0]}개
-                </div>
-                <div style="font-size:10px; color:#B91C1C;">AI 우선 선별</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-        with summary_cols[1]:
-            st.markdown(f"""
-            <div style="
-                background:#FFFBEB;
-                border:1px solid #FDE68A;
-                border-radius:12px;
-                padding:10px 12px;
-                min-height:74px;
-            ">
-                <div style="font-size:11px; color:#92400E;">⚠️ 평균 GAP</div>
-                <div style="font-size:20px; font-weight:800; color:#78350F;">
-                    {avg_gap:.1f}%p
-                </div>
-                <div style="font-size:10px; color:#B45309;">목표 대비 부족폭</div>
-            </div>
-            """, unsafe_allow_html=True)
-
-        with summary_cols[2]:
-            st.markdown(f"""
-            <div style="
-                background:#EFF6FF;
-                border:1px solid #BFDBFE;
-                border-radius:12px;
-                padding:10px 12px;
-                min-height:74px;
-            ">
-                <div style="font-size:11px; color:#1D4ED8;">📦 과재고 의심</div>
-                <div style="font-size:20px; font-weight:800; color:#1E3A8A;">
-                    {overstock_count}개
-                </div>
-                <div style="font-size:10px; color:#2563EB;">판매 대비 재고 과다</div>
-            </div>
-            """, unsafe_allow_html=True)
-        view_cols = []
-        for col in [
-            style_name_col,
-            brand_col,
-            "총판매율",
-            "GAP",
-            "상태",
-            "추천액션"
-        ]:
-            if col and col in filter_df.columns and col not in view_cols:
-                view_cols.append(col)
-
-        diag_view = filter_df.sort_values("GAP").head(15)[view_cols]
-
-        st.dataframe(
-            format_number_cols(diag_view).style.map(
-                lambda x: "color: red; font-weight: bold;" if isinstance(x, (int, float)) and x < 0 else "",
-                subset=["GAP"]
-            ),
-            use_container_width=True,
-            height=300
-        )
-
-    with right:
-        st.subheader("카테고리별 운영 현황")
-        st.markdown("<div class='small-note'>총판매율과 목표 대비 판단 중심</div>", unsafe_allow_html=True)
-
-        if category_col:
-            cat = summary.groupby(category_col).agg({
-                sum_sales_col: "sum",
-                sum_stock_col: "sum"
+        if brand_col and brand_col in diagnosis.columns:
+            brand_perf = diagnosis.groupby(brand_col).agg({
+                "판매": "sum",
+                "재고": "sum",
+                style_col: "nunique"
             }).reset_index()
 
-            cat["총판매율"] = cat.apply(
-                lambda x: x[sum_sales_col] / (x[sum_sales_col] + x[sum_stock_col]) * 100
-                if (x[sum_sales_col] + x[sum_stock_col]) > 0 else 0,
+            brand_perf["총판매율"] = brand_perf.apply(
+                lambda x: x["판매"] / (x["판매"] + x["재고"]) * 100
+                if (x["판매"] + x["재고"]) > 0 else 0,
                 axis=1
             ).round(1)
 
-            cat["목표판매율"] = cat[category_col].map(category_target).fillna(60)
-            cat["GAP"] = (cat["총판매율"] - cat["목표판매율"]).round(1)
-            cat["판단"] = cat.apply(
-                lambda x: "정상" if x["총판매율"] >= x["목표판매율"] else "점검",
-                axis=1
-            )
-            st.caption("카테고리별 실제 판매율과 목표 판매율 비교")
-            fig = px.bar(
-                cat,
-                x=category_col,
-                y="총판매율",
+            brand_perf = brand_perf.sort_values("총판매율", ascending=False).head(10)
+
+            fig_brand = px.bar(
+                brand_perf,
+                x="총판매율",
+                y=brand_col,
+                orientation="h",
                 text="총판매율",
                 title=None
             )
 
-            fig.update_traces(
-                textposition="outside"
+            fig_brand.update_traces(textposition="outside")
+
+            fig_brand.update_layout(
+                height=330,
+                margin=dict(l=10, r=20, t=10, b=10),
+                xaxis_title="판매율(%)",
+                yaxis_title="",
+                showlegend=False,
+                yaxis=dict(autorange="reversed")
             )
 
-            fig.update_layout(
-                height=280,
-                margin=dict(l=10, r=10, t=10, b=10),
-                xaxis_title="",
-                yaxis_title="판매율(%)",
-                showlegend=False
+            st.plotly_chart(fig_brand, use_container_width=True)
+
+            brand_view = brand_perf[[brand_col, "총판매율", style_col]]
+            brand_view.columns = ["브랜드", "판매율", "스타일수"]
+            st.dataframe(
+                format_number_cols(brand_view),
+                use_container_width=True,
+                height=180
+            )
+        else:
+            st.info("브랜드 컬럼을 찾을 수 없습니다.")
+
+    with store_col_area:
+        st.subheader("점포별 판매 트렌드 TOP 10")
+
+        if inv_style_col and inv_store_col and sales_style_col and sales_store_col and sales_qty_col:
+            store_stock = inventory.copy()
+            store_sales = sales.copy()
+
+            if inv_type_col:
+                store_stock_only = store_stock[
+                    ~store_stock[inv_type_col].astype(str).str.contains("창고", na=False)
+                ].copy()
+            else:
+                store_stock_only = store_stock.copy()
+
+            stock_by_store = store_stock_only.groupby(inv_store_col)[inv_stock_col].sum().reset_index()
+            sales_by_store = store_sales.groupby(sales_store_col)[sales_qty_col].sum().reset_index()
+
+            stock_by_store.columns = ["점포명", "재고"]
+            sales_by_store.columns = ["점포명", "판매"]
+
+            store_perf_summary = pd.merge(
+                stock_by_store,
+                sales_by_store,
+                on="점포명",
+                how="left"
             )
 
-            st.plotly_chart(
-                fig,
-                use_container_width=True
+            store_perf_summary["판매"] = store_perf_summary["판매"].fillna(0)
+            store_perf_summary["판매율"] = store_perf_summary.apply(
+                lambda x: x["판매"] / (x["판매"] + x["재고"]) * 100
+                if (x["판매"] + x["재고"]) > 0 else 0,
+                axis=1
+            ).round(1)
+
+            store_perf_top = store_perf_summary.sort_values(
+                "판매율",
+                ascending=False
+            ).head(10)
+
+            fig_store = px.bar(
+                store_perf_top,
+                x="판매율",
+                y="점포명",
+                orientation="h",
+                text="판매율",
+                title=None
             )
-            cat_view = cat[[category_col, "총판매율", "목표판매율", "GAP", "판단"]]
-            st.dataframe(format_number_cols(cat_view), use_container_width=True, height=180)
-#        st.subheader("카테고리별 판매 구성비")
-#
-#        if category_col:
-#            pie_data = cat[[category_col, sum_sales_col]].copy()
-#            pie_data.columns = ["카테고리", "판매수량"]
-#
-#            st.plotly_chart(
-#                px.pie(
-#                    pie_data,
-#                    names="카테고리",
-#                    values="판매수량",
-#                    hole=0.45
-#                ),
-#                use_container_width=True
-#        )
+
+            fig_store.update_traces(textposition="outside")
+
+            fig_store.update_layout(
+                height=330,
+                margin=dict(l=10, r=20, t=10, b=10),
+                xaxis_title="판매율(%)",
+                yaxis_title="",
+                showlegend=False,
+                yaxis=dict(autorange="reversed")
+            )
+
+            st.plotly_chart(fig_store, use_container_width=True)
+
+            store_view = store_perf_top[["점포명", "판매율", "판매", "재고"]]
+            st.dataframe(
+                format_number_cols(store_view),
+                use_container_width=True,
+                height=180
+            )
+        else:
+            st.info("점포 분석을 위한 재고/판매 컬럼을 찾을 수 없습니다.")
+
     st.divider()
 
     # ======================
