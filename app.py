@@ -313,14 +313,14 @@ if inventory_file and summary_file and sales_file:
                 border:1px solid #E5E7EB;
                 border-radius:14px;
                 padding:14px 16px;
-                min-height:96px;
+                min-height:72px;
                 box-shadow:0 1px 3px rgba(15,23,42,0.08);
             ">
                 <div style="font-size:20px; margin-bottom:8px;">{icon}</div>
                 <div style="font-size:12px; color:#6B7280; margin-bottom:4px;">
                     {label}
                 </div>
-                <div style="font-size:22px; font-weight:800; color:#111827;">
+                <div style="font-size:20px; font-weight:800; color:#111827;">
                     {value}
                 </div>
                 <div style="font-size:11px; color:#9CA3AF; margin-top:4px;">
@@ -437,8 +437,29 @@ if inventory_file and summary_file and sales_file:
                 axis=1
             )
             st.caption("카테고리별 실제 판매율과 목표 판매율 비교")
-            st.bar_chart(
-                cat.set_index(category_col)[["총판매율"]]
+            fig = px.bar(
+                cat,
+                x=category_col,
+                y="총판매율",
+                text="총판매율",
+                title=None
+            )
+
+            fig.update_traces(
+                textposition="outside"
+            )
+
+            fig.update_layout(
+                height=280,
+                margin=dict(l=10, r=10, t=10, b=10),
+                xaxis_title="",
+                yaxis_title="판매율(%)",
+                showlegend=False
+            )
+
+            st.plotly_chart(
+                fig,
+                use_container_width=True
             )
             cat_view = cat[[category_col, "총판매율", "목표판매율", "GAP", "판단"]]
             st.dataframe(format_number_cols(cat_view), use_container_width=True, height=180)
