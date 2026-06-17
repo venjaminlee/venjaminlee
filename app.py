@@ -10,6 +10,7 @@ import streamlit as st
 
 
 # =========================================================
+# VERSION: V34 - readable fonts, larger headline, page-scroll tables
 # PAGE CONFIG
 # =========================================================
 
@@ -148,29 +149,36 @@ st.markdown(
     }}
 
     .hero {{
+        width: 100%;
+        min-height: 68px;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
         background: linear-gradient(135deg, #101827 0%, #1C3470 58%, #2D63D8 100%);
         color: white;
-        border-radius: 14px;
-        padding: 10px 14px;
-        margin-bottom: 6px;
-        box-shadow: 0 7px 18px rgba(17, 24, 39, 0.14);
+        border-radius: 16px;
+        padding: 15px 19px;
+        margin-bottom: 9px;
+        box-shadow: 0 9px 22px rgba(17, 24, 39, 0.16);
     }}
 
     .hero-title {{
-        font-size: 18px;
+        font-size: 24px;
         font-weight: 850;
-        letter-spacing: -0.035em;
-        line-height: 1.2;
+        letter-spacing: -0.04em;
+        line-height: 1.15;
     }}
 
     .hero-sub {{
-        font-size: 9px;
+        font-size: 11.5px;
         color: #D8E2F5;
-        margin-top: 4px;
+        margin-top: 6px;
+        line-height: 1.35;
     }}
 
     .section-label {{
-        font-size: 11px;
+        font-size: 12px;
         font-weight: 850;
         color: #1F2937;
         letter-spacing: -0.02em;
@@ -204,19 +212,19 @@ st.markdown(
     }}
 
     .kpi-label {{
-        font-size: 8.8px;
+        font-size: 10px;
         color: #6B7280;
     }}
 
     .kpi-value {{
-        font-size: 18px;
+        font-size: 20px;
         line-height: 1.05;
         font-weight: 850;
         color: #111827;
     }}
 
     .kpi-sub {{
-        font-size: 8px;
+        font-size: 9.2px;
         color: #9CA3AF;
         margin-top: 3px;
     }}
@@ -230,21 +238,21 @@ st.markdown(
     }}
 
     .insight-title {{
-        font-size: 8.8px;
+        font-size: 10px;
         font-weight: 800;
         color: #4B5563;
         margin-bottom: 5px;
     }}
 
     .insight-value {{
-        font-size: 16.5px;
+        font-size: 18px;
         font-weight: 850;
         color: #111827;
         line-height: 1.1;
     }}
 
     .insight-desc {{
-        font-size: 8.3px;
+        font-size: 9.4px;
         color: #6B7280;
         line-height: 1.35;
         margin-top: 4px;
@@ -266,20 +274,21 @@ st.markdown(
     }}
 
     .action-title {{
-        font-size: 9px;
+        font-size: 10px;
         color: #4B5563;
         font-weight: 800;
     }}
 
     .action-value {{
-        font-size: 16.5px;
+        font-size: 18px;
         font-weight: 850;
         color: #111827;
         margin-top: 2px;
+        overflow: visible;
     }}
 
     .action-desc {{
-        font-size: 8.3px;
+        font-size: 9.4px;
         color: #6B7280;
         line-height: 1.35;
         margin-top: 3px;
@@ -319,19 +328,19 @@ st.markdown(
     }}
 
     .table-title {{
-        font-size: 11px;
+        font-size: 12px;
         font-weight: 850;
         color: #1F2937;
     }}
 
     .table-meta {{
-        font-size: 8px;
+        font-size: 9px;
         color: #8A94A6;
         margin-left: 6px;
     }}
 
     .table-link {{
-        font-size: 8.3px;
+        font-size: 9px;
         color: #356AE6;
         font-weight: 700;
     }}
@@ -341,7 +350,7 @@ st.markdown(
         border-collapse: separate;
         border-spacing: 0;
         table-layout: fixed;
-        font-size: 8.5px;
+        font-size: 9.8px;
         color: #374151;
     }}
 
@@ -353,7 +362,10 @@ st.markdown(
         border-top: 1px solid #E7EAF0;
         border-bottom: 1px solid #E7EAF0;
         text-align: left;
-        white-space: nowrap;
+        white-space: normal;
+        word-break: keep-all;
+        overflow-wrap: anywhere;
+        line-height: 1.25;
     }}
 
     .compact-table th:first-child {{
@@ -367,14 +379,17 @@ st.markdown(
     }}
 
     .compact-table td {{
-        height: 24px;
-        padding: 4px 6px;
+        min-height: 28px;
+        padding: 6px 7px;
         border-bottom: 1px solid #EEF1F5;
         background: #FFFFFF;
         vertical-align: middle;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        white-space: normal;
+        word-break: keep-all;
+        overflow-wrap: anywhere;
+        overflow: visible;
+        text-overflow: clip;
+        line-height: 1.35;
     }}
 
     .compact-table tbody tr:hover td {{
@@ -395,7 +410,7 @@ st.markdown(
         display: inline-block;
         padding: 2px 6px;
         border-radius: 999px;
-        font-size: 7.8px;
+        font-size: 8.8px;
         font-weight: 800;
         line-height: 1.2;
     }}
@@ -414,7 +429,7 @@ st.markdown(
         padding: 0 12px;
         border-radius: 9px;
         background: #EEF1F6;
-        font-size: 10px;
+        font-size: 10.5px;
     }}
 
     .stTabs [aria-selected="true"] {{
@@ -479,6 +494,90 @@ def format_number_cols(df: pd.DataFrame) -> pd.DataFrame:
             else:
                 out[col] = out[col].round(0).astype(int)
     return out
+
+
+def render_html_table(
+    df: pd.DataFrame,
+    title: str,
+    note: str = "",
+    column_widths: list[int] | None = None,
+) -> None:
+    """Render a full-width table without its own vertical or horizontal scrollbar."""
+    if df is None or df.empty:
+        st.info(f"{title} 데이터가 없습니다.")
+        return
+
+    view = df.copy()
+    columns = [str(col) for col in view.columns]
+
+    if column_widths and len(column_widths) == len(columns):
+        colgroup = "<colgroup>" + "".join(
+            f'<col style="width:{width}%">' for width in column_widths
+        ) + "</colgroup>"
+    else:
+        colgroup = ""
+
+    def format_cell(col: str, value) -> tuple[str, str]:
+        if pd.isna(value):
+            return "-", ""
+
+        text = str(value)
+
+        if col == "상태":
+            if "판매부진" in text or "위험" in text:
+                cls = "badge-red"
+            elif "주의" in text:
+                cls = "badge-amber"
+            else:
+                cls = "badge-green"
+            return f'<span class="badge {cls}">{html.escape(text)}</span>', ""
+
+        if col == "추천액션":
+            if "점출" in text or "배분" in text:
+                cls = "badge-blue"
+            elif "관찰" in text:
+                cls = "badge-amber"
+            else:
+                cls = "badge-green"
+            return f'<span class="badge {cls}">{html.escape(text)}</span>', ""
+
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            numeric = float(value)
+            if col == "GAP":
+                return f"{numeric:.1f}%p", "num negative" if numeric < 0 else "num"
+            if "율" in col:
+                return f"{numeric:.1f}%", "num"
+            if col == "면적당판매":
+                return f"{numeric:,.2f}", "num"
+            if numeric.is_integer():
+                return f"{int(numeric):,}", "num"
+            return f"{numeric:,.1f}", "num"
+
+        return html.escape(text), ""
+
+    head_html = "".join(f"<th>{html.escape(col)}</th>" for col in columns)
+    rows_html = []
+
+    for _, row in view.iterrows():
+        cells = []
+        for col in columns:
+            cell_html, cell_cls = format_cell(col, row[col])
+            class_attr = f' class="{cell_cls}"' if cell_cls else ""
+            cells.append(f"<td{class_attr}>{cell_html}</td>")
+        rows_html.append("<tr>" + "".join(cells) + "</tr>")
+
+    meta_html = f'<span class="table-meta">{html.escape(note)}</span>' if note else ""
+    table_html = (
+        '<div class="table-card">'
+        '<div class="table-head">'
+        f'<div><span class="table-title">{html.escape(title)}</span>{meta_html}</div>'
+        '</div>'
+        '<table class="compact-table">'
+        f'{colgroup}<thead><tr>{head_html}</tr></thead>'
+        f'<tbody>{"".join(rows_html)}</tbody>'
+        '</table></div>'
+    )
+    st.markdown(table_html, unsafe_allow_html=True)
 
 
 def read_excel(uploaded_file, sheet_name=0) -> pd.DataFrame:
@@ -569,18 +668,18 @@ def style_plot(fig, height: int = 220) -> None:
         margin=dict(l=5, r=10, t=8, b=5),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(size=10, color="#4B5563"),
+        font=dict(size=11, color="#4B5563"),
         xaxis=dict(
             title="",
             showgrid=True,
             gridcolor="#EEF1F5",
             zeroline=False,
-            tickfont=dict(size=9),
+            tickfont=dict(size=10),
         ),
         yaxis=dict(
             title="",
             showgrid=False,
-            tickfont=dict(size=9),
+            tickfont=dict(size=10),
         ),
         showlegend=False,
     )
@@ -1015,11 +1114,11 @@ def render_brand_store_charts() -> None:
                 hovertemplate="%{label}<br>%{value}개 · %{percent}<extra></extra>",
             )
             fig.add_annotation(
-                text=f"<b>{len(filter_df):,}</b><br><span style='font-size:8px;color:#8A94A6'>관리상품</span>",
+                text=f"<b>{len(filter_df):,}</b><br><span style='font-size:9px;color:#8A94A6'>관리상품</span>",
                 x=0.5,
                 y=0.5,
                 showarrow=False,
-                font=dict(size=17, color="#111827"),
+                font=dict(size=19, color="#111827"),
             )
             fig.update_layout(
                 height=190,
@@ -1031,7 +1130,7 @@ def render_brand_store_charts() -> None:
                     y=-0.08,
                     x=0.5,
                     xanchor="center",
-                    font=dict(size=8, color="#6B7280"),
+                    font=dict(size=9, color="#6B7280"),
                     itemwidth=34,
                 ),
                 showlegend=True,
@@ -1053,7 +1152,7 @@ def render_brand_store_charts() -> None:
                 )
                 fig.update_traces(
                     textposition="outside",
-                    textfont_size=8,
+                    textfont_size=9,
                     marker_line_width=0,
                     cliponaxis=False,
                 )
@@ -1063,7 +1162,7 @@ def render_brand_store_charts() -> None:
                     line_dash="dot",
                     line_color="#C9CFDA",
                     annotation_text="목표",
-                    annotation_font_size=7,
+                    annotation_font_size=8,
                     annotation_font_color="#8A94A6",
                 )
                 style_plot(fig, 190)
@@ -1086,7 +1185,7 @@ def render_brand_store_charts() -> None:
                 )
                 fig.update_traces(
                     textposition="outside",
-                    textfont_size=8,
+                    textfont_size=9,
                     marker_line_width=0,
                     cliponaxis=False,
                 )
@@ -1096,7 +1195,7 @@ def render_brand_store_charts() -> None:
                     line_dash="dot",
                     line_color="#C9CFDA",
                     annotation_text="목표",
-                    annotation_font_size=7,
+                    annotation_font_size=8,
                     annotation_font_color="#8A94A6",
                 )
                 style_plot(fig, 190)
@@ -1122,11 +1221,12 @@ def render_priority_table(height: int = 225) -> None:
         if col and col in filter_df.columns and col not in cols:
             cols.append(col)
 
-    st.dataframe(
-        format_number_cols(filter_df.sort_values("GAP").head(18)[cols]),
-        use_container_width=True,
-        height=height,
-        hide_index=True,
+    view = filter_df.sort_values("GAP").head(18)[cols].copy()
+    render_html_table(
+        view,
+        "AI 우선 발견사항",
+        "GAP 기준 상위 18개",
+        [23, 12, 8, 9, 9, 17, 10, 12][:len(cols)],
     )
 
 
@@ -1235,8 +1335,6 @@ def render_full_table(height: int = 330) -> None:
         "판매",
         "재고",
         "총판매율",
-        "목표판매율",
-        "기대판매율",
         "GAP",
         "문제원인",
         "상태",
@@ -1245,11 +1343,13 @@ def render_full_table(height: int = 330) -> None:
         if col and col in filter_df.columns and col not in cols:
             cols.append(col)
 
-    st.dataframe(
-        format_number_cols(filter_df[cols].sort_values("GAP")),
-        use_container_width=True,
-        height=height,
-        hide_index=True,
+    view = filter_df[cols].sort_values("GAP").copy()
+    widths = [10, 17, 7, 9, 6, 6, 6, 8, 8, 11, 6, 6]
+    render_html_table(
+        view,
+        "상품 전체 진단",
+        f"총 {len(view):,}개 상품 · 페이지 스크롤로 전체 확인",
+        widths[:len(cols)],
     )
 
 
@@ -1275,11 +1375,12 @@ elif selected_menu == "브랜드 · 점포":
             if not brand_perf.empty:
                 brand_view = brand_perf.sort_values("판매율", ascending=False).copy()
                 brand_view = brand_view.rename(columns={style_col: "스타일수"})
-                st.dataframe(
-                    format_number_cols(brand_view[[brand_col, "판매율", "판매", "재고", "스타일수"]]),
-                    use_container_width=True,
-                    height=300,
-                    hide_index=True,
+                brand_table = brand_view[[brand_col, "판매율", "판매", "재고", "스타일수"]].copy()
+                render_html_table(
+                    brand_table,
+                    "브랜드 운영 상세",
+                    f"총 {len(brand_table):,}개 브랜드",
+                    [32, 17, 17, 17, 17],
                 )
             else:
                 st.info("브랜드 데이터가 없습니다.")
@@ -1288,11 +1389,13 @@ elif selected_menu == "브랜드 · 점포":
         with st.container(border=True):
             st.subheader("점포 운영 상세")
             store_cols = [c for c in ["점포명", "판매율", "판매", "재고", "면적당판매"] if c in store_perf_summary.columns]
-            st.dataframe(
-                format_number_cols(store_perf_summary.sort_values("판매율", ascending=False)[store_cols]),
-                use_container_width=True,
-                height=300,
-                hide_index=True,
+            store_table = store_perf_summary.sort_values("판매율", ascending=False)[store_cols].copy()
+            store_widths = [34, 18, 16, 16, 16][:len(store_cols)]
+            render_html_table(
+                store_table,
+                "점포 운영 상세",
+                f"총 {len(store_table):,}개 점포",
+                store_widths,
             )
 
     if not cat_perf.empty:
@@ -1313,9 +1416,7 @@ elif selected_menu == "AI 인사이트":
     render_kpis()
     render_insight_cards()
 
-    with st.container(border=True):
-        st.subheader("AI 우선 발견사항")
-        render_priority_table(300)
+    render_priority_table(300)
 
     left, right = st.columns(2)
     with left:
@@ -1359,12 +1460,44 @@ elif selected_menu == "AI 액션":
     tabs = st.tabs(["점출 / 점입", "창고 배분", "우선 조치"])
     with tabs[0]:
         if not rec_df.empty:
-            st.dataframe(rec_df.head(40), use_container_width=True, height=360, hide_index=True)
+            rec_view = rec_df.head(40).copy()
+            rec_view["출발 현황"] = rec_view.apply(
+                lambda x: f"재고 {int(x['출발재고'])} / 3개월판매 {int(x['출발3개월판매'])}",
+                axis=1,
+            )
+            rec_view["도착 현황"] = rec_view.apply(
+                lambda x: f"재고 {int(x['도착재고'])} / 3개월판매 {int(x['도착3개월판매'])}",
+                axis=1,
+            )
+            rec_view = rec_view[[
+                "스타일코드", "재고과다점", "판매우수점", "추천수량",
+                "출발 현황", "도착 현황", "추천사유",
+            ]]
+            render_html_table(
+                rec_view,
+                "점출 / 점입 추천",
+                f"상위 {len(rec_view):,}건",
+                [13, 12, 12, 8, 16, 16, 23],
+            )
         else:
             st.info("현재 조건에 해당하는 점출/점입 추천 항목이 없습니다.")
     with tabs[1]:
         if not allocation.empty:
-            st.dataframe(allocation.head(40), use_container_width=True, height=360, hide_index=True)
+            allocation_view = allocation.head(40).copy()
+            allocation_cols = [
+                c for c in [
+                    "스타일코드", "추천점포", "창고재고", "최근3개월판매",
+                    "추천수량", "추천사유",
+                ] if c in allocation_view.columns
+            ]
+            allocation_view = allocation_view[allocation_cols]
+            allocation_widths = [16, 17, 13, 15, 12, 27][:len(allocation_cols)]
+            render_html_table(
+                allocation_view,
+                "창고 배분 추천",
+                f"상위 {len(allocation_view):,}건",
+                allocation_widths,
+            )
         else:
             st.info("현재 조건에 해당하는 창고 배분 추천 항목이 없습니다.")
     with tabs[2]:
@@ -1372,8 +1505,6 @@ elif selected_menu == "AI 액션":
 
 else:
     render_kpis()
-    with st.container(border=True):
-        st.subheader("상품 전체 진단")
-        render_full_table(520)
+    render_full_table(520)
 
 
