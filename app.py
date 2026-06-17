@@ -391,6 +391,72 @@ if inventory_file and summary_file and sales_file:
         st.subheader("AI 우선 조치 대상 상품")
         st.markdown("<div class='small-note'>목표 대비 부족폭이 큰 상품부터 우선 점검</div>", unsafe_allow_html=True)
 
+        # AI 우선 조치 요약 카드
+        top_action_df = filter_df[
+            filter_df["추천액션"].astype(str).str.contains("점출|할인|배분")
+        ].copy()
+
+        avg_gap = (
+            top_action_df["GAP"].mean()
+            if not top_action_df.empty else 0
+        )
+
+        overstock_count = top_action_df[
+            top_action_df["재고"] > top_action_df["판매"] * 2
+        ].shape[0] if not top_action_df.empty else 0
+
+        summary_cols = st.columns(3)
+
+        with summary_cols[0]:
+            st.markdown(f"""
+            <div style="
+                background:#FEF2F2;
+                border:1px solid #FECACA;
+                border-radius:12px;
+                padding:10px 12px;
+                min-height:74px;
+            ">
+                <div style="font-size:11px; color:#991B1B;">🔴 관리 필요</div>
+                <div style="font-size:20px; font-weight:800; color:#7F1D1D;">
+                    {top_action_df.shape[0]}개
+                </div>
+                <div style="font-size:10px; color:#B91C1C;">AI 우선 선별</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with summary_cols[1]:
+            st.markdown(f"""
+            <div style="
+                background:#FFFBEB;
+                border:1px solid #FDE68A;
+                border-radius:12px;
+                padding:10px 12px;
+                min-height:74px;
+            ">
+                <div style="font-size:11px; color:#92400E;">⚠️ 평균 GAP</div>
+                <div style="font-size:20px; font-weight:800; color:#78350F;">
+                    {avg_gap:.1f}%p
+                </div>
+                <div style="font-size:10px; color:#B45309;">목표 대비 부족폭</div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        with summary_cols[2]:
+            st.markdown(f"""
+            <div style="
+                background:#EFF6FF;
+                border:1px solid #BFDBFE;
+                border-radius:12px;
+                padding:10px 12px;
+                min-height:74px;
+            ">
+                <div style="font-size:11px; color:#1D4ED8;">📦 과재고 의심</div>
+                <div style="font-size:20px; font-weight:800; color:#1E3A8A;">
+                    {overstock_count}개
+                </div>
+                <div style="font-size:10px; color:#2563EB;">판매 대비 재고 과다</div>
+            </div>
+            """, unsafe_allow_html=True)
         view_cols = []
         for col in [
             style_name_col,
