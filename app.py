@@ -252,8 +252,9 @@ if inventory_file and summary_file and sales_file:
             filter_df = filter_df[filter_df[brand_col].astype(str) == selected_brand]
 
     # ======================
-    # KPI
+    # KPI + AI 운영 진단
     # ======================
+
     risk_count = filter_df[
         filter_df["상태"].astype(str).str.contains("시즌부진|체화위험")
     ].shape[0]
@@ -271,26 +272,110 @@ if inventory_file and summary_file and sales_file:
         & filter_df["추천액션"].astype(str).str.contains("할인")
     ].shape[0]
 
+    target_rate = 60
+    current_rate = sell_through
+    achievement_rate = current_rate / target_rate
+    gap_to_target = sell_through - target_rate
+
     st.subheader("핵심 KPI")
+
     c1, c2, c3, c4, c5 = st.columns(5)
 
-    c1.metric("판매율", f"{sell_through:.1f}%", f"{sell_through - 60:.1f}%")
+    c1.metric("판매율", f"{sell_through:.1f}%", f"{sell_through - target_rate:.1f}%p")
     c2.metric("관리 필요", f"{action_count:,}")
     c3.metric("최우선 관리", f"{risk_count:,}")
     c4.metric("체화 위험", f"{stock_bad:,}")
     c5.metric("관리 상품", f"{filter_df.shape[0]:,}")
-    st.caption(
-    f"현재 판매율 {sell_through:.1f}% / 즉시 조치 대상 {action_count}개 상품"
-    )
-    st.markdown("### 📌 핵심 KPI 요약")
 
-    target_rate = 60
-    current_rate = sell_through
-    achievement_rate = current_rate / target_rate
+    if gap_to_target >= 0:
+        sales_comment = f"현재 판매율은 {sell_through:.1f}%로 목표 판매율 {target_rate}%를 달성했습니다."
+    else:
+        sales_comment = f"현재 판매율은 {sell_through:.1f}%로 목표 판매율 {target_rate}% 대비 {abs(gap_to_target):.1f}%p 부족합니다."
+
+    if action_count > 0:
+        action_comment = f"AI 분석 결과, 우선 점검이 필요한 상품은 {action_count}개입니다."
+    else:
+        action_comment = "AI 분석 결과, 즉시 조치가 필요한 상품은 없습니다."
+
+    recommended_actions = []
+
+    if action_count > 0:
+        recommended_actions.append(f"① 관리 필요 상품 {action_count}개 우선 점검")
+
+    if sell_through < target_rate:
+        recommended_actions.append("② 판매 부진 상품 점출/배분 검토")
+
+    if stock_bad > 0:
+        recommended_actions.append(f"③ 체화 위험 상품 {stock_bad}개 할인 검토")
+
+    if len(recommended_actions) == 0:
+        recommended_actions.append("현재 즉시 조치가 필요한 항목은 없습니다.")
+
+    action_text = "<br>".join(recommended_actions)
+
+    st.markdown(f"""
+    <div style="
+        background-color:#F8FAFC;
+        border:1px solid #E5E7EB;
+        border-radius:16px;
+        padding:18px 20px;
+        margin:14px 0 10px 0;
+    ">
+        <div style="font-size:17px; font-weight:800; margin-bottom:8px;">
+            🤖 AI 운영 진단
+        </div>
+
+        <div style="font-size:13px; line-height:1.7; color:#374151;">
+            {sales_comment}<br>
+            {action_comment}
+        </div>
+
+        <div style="
+            margin-top:12px;
+            padding:12px 14px;
+            background-color:#FFFFFF;
+            border:1px solid #E5E7EB;
+            border-radius:12px;
+            font-size:13px;
+            line-height:1.9;
+            color:#111827;
+        ">
+            <b>AI 추천 액션</b><br>
+            {action_text}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    review_reduction = (
+        (1 - action_count / filter_df.shape[0]) * 100
+        if filter_df.shape[0] > 0 else 0
+    )
+
+    st.markdown(f"""
+    <div style="
+        background-color:#111827;
+        color:white;
+        border-radius:14px;
+        padding:14px 18px;
+        margin:8px 0 14px 0;
+    ">
+        <div style="font-size:15px; font-weight:700; margin-bottom:6px;">
+            ⏱️ 업무 절감 효과
+        </div>
+
+        <div style="font-size:13px; line-height:1.7;">
+            기존 {filter_df.shape[0]}개 상품 전수 검토 →
+            TOPS AI가 {action_count}개 관리 필요 상품 자동 선별<br>
+            검토 대상 약 <b>{review_reduction:.0f}% 감소</b>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
     st.progress(min(achievement_rate, 1.0))
+    st.caption(
+        f"목표 판매율 {target_rate}% 대비 현재 {current_rate:.1f}% 달성"
+    )
 
-    st.caption(f"목표 판매율 {target_rate}% 대비 현재 {current_rate:.1f}% 달성")
     st.divider()
     # ======================
     # AI 운영 진단 카드
