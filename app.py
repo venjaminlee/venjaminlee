@@ -292,7 +292,55 @@ if inventory_file and summary_file and sales_file:
 
     st.caption(f"목표 판매율 {target_rate}% 대비 현재 {current_rate:.1f}% 달성")
     st.divider()
+    # ======================
+    # AI 운영 진단 카드
+    # ======================
 
+    gap_to_target = sell_through - target_rate
+
+    if gap_to_target >= 0:
+        sales_comment = f"현재 판매율은 {sell_through:.1f}%로 목표 판매율 {target_rate}%를 달성했습니다."
+    else:
+        sales_comment = f"현재 판매율은 {sell_through:.1f}%로 목표 판매율 {target_rate}% 대비 {abs(gap_to_target):.1f}%p 부족합니다."
+
+    if action_count > 0:
+        action_comment = f"AI 분석 결과, 우선 점검이 필요한 상품은 {action_count}개입니다."
+    else:
+        action_comment = "AI 분석 결과, 즉시 조치가 필요한 상품은 없습니다."
+
+    ai_card_html = f"""
+    <div style="
+        background-color:#F8FAFC;
+        border:1px solid #E5E7EB;
+        border-radius:14px;
+        padding:16px 18px;
+        margin:10px 0 14px 0;
+    ">
+        <div style="font-size:16px; font-weight:700; margin-bottom:8px;">
+            🤖 AI 운영 진단
+        </div>
+        <div style="font-size:13px; line-height:1.7; color:#374151;">
+            {sales_comment}<br>
+            {action_comment}<br>
+            재고 과다 및 판매 부진 상품을 중심으로 점출/배분 검토가 필요합니다.
+        </div>
+        <div style="
+            margin-top:10px;
+            padding:10px;
+            background-color:#FFFFFF;
+            border-radius:10px;
+            font-size:12px;
+            color:#111827;
+        ">
+            <b>추천 액션</b><br>
+            • 관리 필요 상품 우선 확인<br>
+            • 재고 과다 점포 → 판매 우수 점포 점출 검토<br>
+            • 목표 미달 카테고리 중심 모니터링
+        </div>
+    </div>
+    """
+
+    st.markdown(ai_card_html, unsafe_allow_html=True)
     # ======================
     # 상품 진단 TOP + 카테고리
     # ======================
