@@ -263,13 +263,8 @@ if inventory_file and summary_file and sales_file:
         filter_df["추천액션"].astype(str).str.contains("점출|할인|배분")
     ].shape[0]
 
-    season_bad = filter_df[
-        filter_df["상태"].astype(str).str.contains("시즌부진")
-    ].shape[0]
-
     stock_bad = filter_df[
         filter_df["상태"].astype(str).str.contains("체화위험|판매부진")
-        & filter_df["추천액션"].astype(str).str.contains("할인")
     ].shape[0]
 
     target_rate = 60
@@ -306,70 +301,32 @@ if inventory_file and summary_file and sales_file:
         recommended_actions.append("② 판매 부진 상품 점출/배분 검토")
 
     if stock_bad > 0:
-        recommended_actions.append(f"③ 체화 위험 상품 {stock_bad}개 할인 검토")
+        recommended_actions.append(f"③ 체화 위험 상품 {stock_bad}개 모니터링")
 
     if len(recommended_actions) == 0:
         recommended_actions.append("현재 즉시 조치가 필요한 항목은 없습니다.")
 
-    action_text = "<br>".join(recommended_actions)
+    action_text = "\n".join(recommended_actions)
 
-    st.markdown(f"""
-    <div style="
-        background-color:#F8FAFC;
-        border:1px solid #E5E7EB;
-        border-radius:16px;
-        padding:18px 20px;
-        margin:14px 0 10px 0;
-    ">
-        <div style="font-size:17px; font-weight:800; margin-bottom:8px;">
-            🤖 AI 운영 진단
-        </div>
-
-        <div style="font-size:13px; line-height:1.7; color:#374151;">
-            {sales_comment}<br>
-            {action_comment}
-        </div>
-
-        <div style="
-            margin-top:12px;
-            padding:12px 14px;
-            background-color:#FFFFFF;
-            border:1px solid #E5E7EB;
-            border-radius:12px;
-            font-size:13px;
-            line-height:1.9;
-            color:#111827;
-        ">
-            <b>AI 추천 액션</b><br>
-            {action_text}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.info(
+        f"🤖 AI 운영 진단\n\n"
+        f"{sales_comment}\n\n"
+        f"{action_comment}\n\n"
+        f"AI 추천 액션\n"
+        f"{action_text}"
+    )
 
     review_reduction = (
         (1 - action_count / filter_df.shape[0]) * 100
         if filter_df.shape[0] > 0 else 0
     )
 
-    st.markdown(f"""
-    <div style="
-        background-color:#111827;
-        color:white;
-        border-radius:14px;
-        padding:14px 18px;
-        margin:8px 0 14px 0;
-    ">
-        <div style="font-size:15px; font-weight:700; margin-bottom:6px;">
-            ⏱️ 업무 절감 효과
-        </div>
-
-        <div style="font-size:13px; line-height:1.7;">
-            기존 {filter_df.shape[0]}개 상품 전수 검토 →
-            TOPS AI가 {action_count}개 관리 필요 상품 자동 선별<br>
-            검토 대상 약 <b>{review_reduction:.0f}% 감소</b>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    st.success(
+        f"⏱️ 업무 절감 효과\n\n"
+        f"기존 {filter_df.shape[0]}개 상품 전수 검토 → "
+        f"TOPS AI가 {action_count}개 관리 필요 상품 자동 선별\n\n"
+        f"검토 대상 약 {review_reduction:.0f}% 감소"
+    )
 
     st.progress(min(achievement_rate, 1.0))
     st.caption(
