@@ -293,15 +293,41 @@ if inventory_file and summary_file and sales_file:
     achievement_rate = current_rate / target_rate
     gap_to_target = sell_through - target_rate
 
-    st.subheader("핵심 KPI")
+    st.markdown("### 핵심 KPI")
 
-    c1, c2, c3, c4, c5 = st.columns(5)
+    kpi_cols = st.columns(5)
 
-    c1.metric("판매율", f"{sell_through:.1f}%", f"{sell_through - target_rate:.1f}%p")
-    c2.metric("관리 필요", f"{action_count:,}")
-    c3.metric("최우선 관리", f"{risk_count:,}")
-    c4.metric("체화 위험", f"{stock_bad:,}")
-    c5.metric("관리 상품", f"{filter_df.shape[0]:,}")
+    kpi_items = [
+        ("📈", "판매율", f"{sell_through:.1f}%", f"{sell_through - target_rate:.1f}%p"),
+        ("⚠️", "관리 필요", f"{action_count:,}", "AI 선별"),
+        ("🔥", "최우선 관리", f"{risk_count:,}", "우선 검토"),
+        ("📦", "체화 위험", f"{stock_bad:,}", "재고 주의"),
+        ("🧾", "관리 상품", f"{filter_df.shape[0]:,}", "분석 대상"),
+    ]
+
+    for col, (icon, label, value, subtext) in zip(kpi_cols, kpi_items):
+        with col:
+            st.markdown(f"""
+            <div style="
+                background:#FFFFFF;
+                border:1px solid #E5E7EB;
+                border-radius:14px;
+                padding:14px 16px;
+                min-height:96px;
+                box-shadow:0 1px 3px rgba(15,23,42,0.08);
+            ">
+                <div style="font-size:20px; margin-bottom:8px;">{icon}</div>
+                <div style="font-size:12px; color:#6B7280; margin-bottom:4px;">
+                    {label}
+                </div>
+                <div style="font-size:22px; font-weight:800; color:#111827;">
+                    {value}
+                </div>
+                <div style="font-size:11px; color:#9CA3AF; margin-top:4px;">
+                    {subtext}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
     if gap_to_target >= 0:
         sales_comment = f"현재 판매율은 {sell_through:.1f}%로 목표 판매율 {target_rate}%를 달성했습니다."
