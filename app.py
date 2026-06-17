@@ -41,12 +41,33 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-with st.sidebar:
-    st.header("데이터 업로드")
-    with st.expander("파일 업로드", expanded=True):
+st.markdown("### 📂 데이터 업로드")
+
+with st.expander("재고 / 총괄장 / 판매리스트 파일 업로드", expanded=True):
+    upload_col1, upload_col2, upload_col3 = st.columns(3)
+
+    with upload_col1:
         inventory_file = st.file_uploader("재고 파일", type=["xlsx"])
+
+    with upload_col2:
         summary_file = st.file_uploader("총괄장", type=["xlsx"])
+
+    with upload_col3:
         sales_file = st.file_uploader("판매리스트", type=["xlsx"])
+
+with st.sidebar:
+    st.markdown("## TOPS AI")
+    selected_menu = st.radio(
+        "메뉴",
+        [
+            "대시보드",
+            "AI 우선 조치",
+            "점출/점입 추천",
+            "창고 출고배분",
+            "상품 전체 진단"
+        ],
+        label_visibility="collapsed"
+    )
 
 
 def make_unique_columns(df):
