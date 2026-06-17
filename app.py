@@ -32,12 +32,26 @@ hr { margin: 0.7rem 0 !important; }
 
 st.markdown("""
 <div style="padding: 8px 0 14px 0;">
-    <h1 style="font-size:18px; margin-bottom:4px;">
-        TOPS AI 재고 운영 의사결정 시스템
+    <h1 style="font-size:22px; margin-bottom:4px;">
+        🤖 TOPS AI Buyer Assistant
     </h1>
-    <div style="font-size:10px; color:#4b5563;">
-        판매율과 재고를 기반으로 우선 조치가 필요한 상품과 점포 액션을 자동 추천합니다.
+    <div style="font-size:12px; color:#4b5563;">
+        데이터를 보는 것이 아니라, 무엇을 해야 하는지 알려주는 AI
     </div>
+</div>
+""", unsafe_allow_html=True)
+st.markdown("""
+<div style="
+background:#F8FAFC;
+padding:12px 16px;
+border-radius:12px;
+border:1px solid #E5E7EB;
+margin-bottom:16px;
+font-size:12px;
+">
+<b>TOPS Inventory AI PoC</b><br>
+재고 · 판매 · 점포 데이터를 분석하여
+우선 조치 상품, 점출/점입, 재고 배분 액션을 추천합니다.
 </div>
 """, unsafe_allow_html=True)
 
