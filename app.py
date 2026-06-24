@@ -10,7 +10,7 @@ import streamlit as st
 
 
 # =========================================================
-# VERSION: V39 - add optional prior-year sales upload and YoY revenue comparison by store, brand, and category
+# VERSION: V39.1 - fix YoY chart legend overlap and keep legend above the first bar
 # PAGE CONFIG
 # =========================================================
 
@@ -1391,11 +1391,15 @@ def render_yoy_dimension(
         style_plot(fig, max(250, len(chart_df) * 30))
         fig.update_layout(
             showlegend=True,
+            margin=dict(l=5, r=10, t=46, b=5),
             legend=dict(
                 orientation="h",
-                y=1.08,
+                y=1.04,
+                yanchor="bottom",
                 x=0,
+                xanchor="left",
                 font=dict(size=9),
+                title_text="",
             ),
             xaxis_tickformat=",.2s",
         )
