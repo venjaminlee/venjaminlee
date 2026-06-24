@@ -10,7 +10,7 @@ import streamlit as st
 
 
 # =========================================================
-# VERSION: V38 - separate dashboard metrics, insight causes, and action guidance
+# VERSION: V39 - add optional prior-year sales upload and YoY revenue comparison by store, brand, and category
 # PAGE CONFIG
 # =========================================================
 
@@ -489,6 +489,132 @@ def to_number(series: pd.Series) -> pd.Series:
     )
 
 
+def format_krw(value: float) -> str:
+    """Format KRW values compactly for KPI cards."""
+    amount = float(value)
+    abs_amount = abs(amount)
+
+    if abs_amount >= 100_000_000:
+        return f"{amount / 100_000_000:,.1f}억"
+    if abs_amount >= 10_000:
+        return f"{amount / 10_000:,.0f}만"
+    return f"{amount:,.0f}"
+
+
+def standardize_sales_for_yoy(
+    sales_df: pd.DataFrame,
+    summary_df: pd.DataFrame,
+    summary_style_col: str,
+    summary_brand_col: str | None,
+    summary_category_col: str | None,
+) -> tuple[pd.DataFrame, str | None]:
+    """Create canonical columns used for current-vs-prior revenue comparisons."""
+    sales_style = find_col(sales_df, ["스타일코드"])
+    sales_store = find_col(sales_df, ["점포명", "매장명", "점포"])
+    sales_amount = find_col(
+        sales_df,
+        ["실판매금액", "판매금액", "매출금액", "총판매", "매출"],
+    )
+    sales_brand = find_col(sales_df, ["서브브랜드명", "브랜드명", "브랜드"])
+    sales_category = find_col(sales_df, ["아이템", "카테고리", "품목"])
+
+    missing = []
+    if sales_style is None:
+        missing.append("스타일코드")
+    if sales_store is None:
+        missing.append("점포명")
+    if sales_amount is None:
+        missing.append("실판매금액")
+
+    if missing:
+        return pd.DataFrame(), ", ".join(missing)
+
+    canonical = pd.DataFrame(
+        {
+            "스타일코드": sales_df[sales_style].astype(str).str.strip(),
+            "점포명": sales_df[sales_store].astype(str).str.strip(),
+            "매출": to_number(sales_df[sales_amount]),
+        }
+    )
+
+    style_meta_cols = [summary_style_col]
+    if summary_brand_col:
+        style_meta_cols.append(summary_brand_col)
+    if summary_category_col:
+        style_meta_cols.append(summary_category_col)
+
+    style_meta = (
+        summary_df[style_meta_cols]
+        .dropna(subset=[summary_style_col])
+        .drop_duplicates(subset=[summary_style_col])
+        .copy()
+    )
+    style_meta[summary_style_col] = style_meta[summary_style_col].astype(str).str.strip()
+    style_meta = style_meta.set_index(summary_style_col)
+
+    if sales_brand:
+        canonical["브랜드"] = sales_df[sales_brand].fillna("미분류").astype(str).str.strip()
+    elif summary_brand_col:
+        canonical["브랜드"] = (
+            canonical["스타일코드"]
+            .map(style_meta[summary_brand_col])
+            .fillna("미분류")
+            .astype(str)
+        )
+    else:
+        canonical["브랜드"] = "미분류"
+
+    if sales_category:
+        canonical["카테고리"] = (
+            sales_df[sales_category].fillna("미분류").astype(str).str.strip()
+        )
+    elif summary_category_col:
+        canonical["카테고리"] = (
+            canonical["스타일코드"]
+            .map(style_meta[summary_category_col])
+            .fillna("미분류")
+            .astype(str)
+        )
+    else:
+        canonical["카테고리"] = "미분류"
+
+    canonical = canonical[canonical["점포명"].ne("")].copy()
+    return canonical, None
+
+
+def build_yoy_comparison(
+    current_sales_df: pd.DataFrame,
+    prior_sales_df: pd.DataFrame,
+    dimension: str,
+) -> pd.DataFrame:
+    """Aggregate current and prior sales and calculate YoY amount/rate by dimension."""
+    current_agg = (
+        current_sales_df.groupby(dimension, dropna=False)["매출"]
+        .sum()
+        .rename("당해매출")
+    )
+    prior_agg = (
+        prior_sales_df.groupby(dimension, dropna=False)["매출"]
+        .sum()
+        .rename("전년매출")
+    )
+
+    comparison = (
+        pd.concat([current_agg, prior_agg], axis=1)
+        .fillna(0)
+        .reset_index()
+    )
+    comparison[dimension] = comparison[dimension].fillna("미분류").astype(str)
+    comparison["증감액"] = comparison["당해매출"] - comparison["전년매출"]
+    comparison["증감률"] = comparison.apply(
+        lambda row: (row["증감액"] / row["전년매출"] * 100)
+        if row["전년매출"] > 0
+        else None,
+        axis=1,
+    )
+    return comparison.sort_values("당해매출", ascending=False).reset_index(drop=True)
+
+
 def format_number_cols(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     for col in out.columns:
@@ -551,6 +677,10 @@ def render_html_table(
             numeric = float(value)
             if col == "GAP":
                 return f"{numeric:.1f}%p", "num negative" if numeric < 0 else "num"
+            if col == "증감률":
+                return f"{numeric:+.1f}%", "num negative" if numeric < 0 else "num"
+            if col == "증감액":
+                return f"{numeric:+,.0f}", "num negative" if numeric < 0 else "num"
             if "율" in col:
                 return f"{numeric:.1f}%", "num"
             if col == "면적당판매":
@@ -716,6 +846,7 @@ with st.sidebar:
         [
             "대시보드",
             "브랜드 · 점포",
+            "전년 매출 비교",
             "AI 인사이트",
             "AI 액션",
             "상세 진단",
@@ -724,13 +855,19 @@ with st.sidebar:
     )
 
 with st.expander("📂 데이터 업로드", expanded=False):
-    up1, up2, up3 = st.columns(3)
+    up1, up2, up3, up4 = st.columns(4)
     with up1:
         inventory_file = st.file_uploader("재고 파일", type=["xlsx"])
     with up2:
         summary_file = st.file_uploader("총괄장", type=["xlsx"])
     with up3:
-        sales_file = st.file_uploader("판매리스트", type=["xlsx"])
+        sales_file = st.file_uploader("당해 판매리스트", type=["xlsx"])
+    with up4:
+        prior_sales_file = st.file_uploader(
+            "전년 판매리스트 (선택)",
+            type=["xlsx"],
+            help="업로드 시 점포·브랜드·카테고리별 전년 대비 매출을 비교합니다.",
+        )
 
 
 # =========================================================
@@ -751,6 +888,11 @@ if not (inventory_file and summary_file and sales_file):
 inventory, store_master = read_inventory_workbook(inventory_file)
 summary = make_unique_columns(read_excel(summary_file))
 sales = make_unique_columns(read_excel(sales_file))
+prior_sales = (
+    make_unique_columns(read_excel(prior_sales_file))
+    if prior_sales_file
+    else pd.DataFrame()
+)
 
 # Column mapping
 inv_style_col = find_col(inventory, ["스타일코드"])
@@ -828,6 +970,8 @@ diagnosis["문제원인"] = diagnosis.apply(diagnose_reason, axis=1)
 
 # Sidebar filters
 filter_df = diagnosis.copy()
+selected_category = "전체"
+selected_brand = "전체"
 with st.sidebar:
     st.divider()
     st.markdown("### 분석 필터")
@@ -851,6 +995,67 @@ with st.sidebar:
             filter_df = filter_df[
                 filter_df[brand_col].astype(str) == selected_brand
             ]
+
+# YoY revenue comparison (optional prior-year upload)
+yoy_available = False
+yoy_error_message = ""
+yoy_current = pd.DataFrame()
+yoy_prior = pd.DataFrame()
+yoy_store = pd.DataFrame()
+yoy_brand = pd.DataFrame()
+yoy_category = pd.DataFrame()
+yoy_current_total = 0.0
+yoy_prior_total = 0.0
+yoy_amount_gap = 0.0
+yoy_rate = 0.0
+
+if prior_sales_file:
+    yoy_current, current_yoy_error = standardize_sales_for_yoy(
+        sales,
+        summary,
+        style_col,
+        brand_col,
+        category_col,
+    )
+    yoy_prior, prior_yoy_error = standardize_sales_for_yoy(
+        prior_sales,
+        summary,
+        style_col,
+        brand_col,
+        category_col,
+    )
+
+    yoy_errors = []
+    if current_yoy_error:
+        yoy_errors.append(f"당해 판매리스트: {current_yoy_error}")
+    if prior_yoy_error:
+        yoy_errors.append(f"전년 판매리스트: {prior_yoy_error}")
+
+    if yoy_errors:
+        yoy_error_message = " / ".join(yoy_errors)
+    else:
+        if selected_category != "전체":
+            yoy_current = yoy_current[yoy_current["카테고리"] == selected_category].copy()
+            yoy_prior = yoy_prior[yoy_prior["카테고리"] == selected_category].copy()
+
+        if selected_brand != "전체":
+            yoy_current = yoy_current[yoy_current["브랜드"] == selected_brand].copy()
+            yoy_prior = yoy_prior[yoy_prior["브랜드"] == selected_brand].copy()
+
+        yoy_current_total = float(yoy_current["매출"].sum())
+        yoy_prior_total = float(yoy_prior["매출"].sum())
+        yoy_amount_gap = yoy_current_total - yoy_prior_total
+        yoy_rate = (
+            yoy_amount_gap / yoy_prior_total * 100
+            if yoy_prior_total > 0
+            else 0.0
+        )
+
+        yoy_store = build_yoy_comparison(yoy_current, yoy_prior, "점포명")
+        yoy_brand = build_yoy_comparison(yoy_current, yoy_prior, "브랜드")
+        yoy_category = build_yoy_comparison(yoy_current, yoy_prior, "카테고리")
+        yoy_available = True
+
 
 # Summary KPI
 # Executive Dashboard shows only current operating facts.
@@ -1096,6 +1301,166 @@ def render_kpis() -> None:
             f"{len(filter_df):,}",
             "현재 필터의 분석 대상",
             "#F1ECFF",
+        )
+
+
+def render_yoy_kpis() -> None:
+    st.markdown('<div class="section-label">전년 대비 매출 Summary</div>', unsafe_allow_html=True)
+    c1, c2, c3, c4 = st.columns(4)
+
+    with c1:
+        kpi_card(
+            "●",
+            "당해 매출",
+            format_krw(yoy_current_total),
+            "업로드한 당해 판매리스트 기준",
+            "#E9F0FF",
+        )
+
+    with c2:
+        kpi_card(
+            "○",
+            "전년 매출",
+            format_krw(yoy_prior_total),
+            "동일 기준 전년 판매리스트",
+            "#F1ECFF",
+        )
+
+    with c3:
+        sign_icon = "↗" if yoy_amount_gap >= 0 else "↘"
+        kpi_card(
+            sign_icon,
+            "매출 증감액",
+            f"{yoy_amount_gap / 100_000_000:+,.1f}억",
+            "당해 매출 - 전년 매출",
+            "#ECF8F4" if yoy_amount_gap >= 0 else "#FFF0F2",
+        )
+
+    with c4:
+        rate_icon = "▲" if yoy_rate >= 0 else "▼"
+        kpi_card(
+            rate_icon,
+            "전년 대비",
+            f"{yoy_rate:+.1f}%",
+            "전년 동기 대비 매출 증감률",
+            "#ECF8F4" if yoy_rate >= 0 else "#FFF0F2",
+        )
+
+
+def render_yoy_dimension(
+    comparison_df: pd.DataFrame,
+    dimension: str,
+    title: str,
+    top_n: int = 12,
+) -> None:
+    if comparison_df.empty:
+        st.info(f"{title} 데이터가 없습니다.")
+        return
+
+    chart_df = (
+        comparison_df.sort_values("당해매출", ascending=False)
+        .head(top_n)
+        .sort_values("당해매출", ascending=True)
+    )
+    long_df = chart_df.melt(
+        id_vars=[dimension],
+        value_vars=["전년매출", "당해매출"],
+        var_name="구분",
+        value_name="매출",
+    )
+
+    with st.container(border=True):
+        st.subheader(f"{title} TOP {min(top_n, len(chart_df))}")
+        fig = px.bar(
+            long_df,
+            x="매출",
+            y=dimension,
+            color="구분",
+            barmode="group",
+            orientation="h",
+            color_discrete_map={
+                "당해매출": BLUE,
+                "전년매출": "#CBD5E1",
+            },
+        )
+        fig.update_traces(
+            hovertemplate=(
+                f"%{{y}}<br>%{{fullData.name}}: %{{x:,.0f}}원<extra></extra>"
+            )
+        )
+        style_plot(fig, max(250, len(chart_df) * 30))
+        fig.update_layout(
+            showlegend=True,
+            legend=dict(
+                orientation="h",
+                y=1.08,
+                x=0,
+                font=dict(size=9),
+            ),
+            xaxis_tickformat=",.2s",
+        )
+        st.plotly_chart(
+            fig,
+            use_container_width=True,
+            config={"displayModeBar": False},
+        )
+
+    table_view = comparison_df[[
+        dimension,
+        "당해매출",
+        "전년매출",
+        "증감액",
+        "증감률",
+    ]].copy()
+    render_html_table(
+        table_view,
+        f"{title} 전체 비교",
+        f"총 {len(table_view):,}개 · 당해 매출 기준 내림차순",
+        [30, 18, 18, 18, 16],
+    )
+
+
+def render_yoy_page() -> None:
+    if not prior_sales_file:
+        st.markdown(
+            """
+            <div class="muted-box">
+                데이터 업로드 영역에서 <b>전년 판매리스트</b>를 추가하면
+                점포·브랜드·카테고리별 전년 대비 매출을 확인할 수 있습니다.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        return
+
+    if yoy_error_message:
+        st.error(
+            "전년 매출 비교에 필요한 컬럼을 찾을 수 없습니다: "
+            + yoy_error_message
+        )
+        return
+
+    if not yoy_available:
+        st.info("전년 매출 비교 데이터가 없습니다.")
+        return
+
+    render_yoy_kpis()
+    st.markdown(
+        '<div class="small-note">현재 사이드바의 브랜드·카테고리 필터가 전년 비교에도 동일하게 적용됩니다.</div>',
+        unsafe_allow_html=True,
+    )
+
+    tabs = st.tabs(["점포별", "브랜드별", "카테고리별"])
+    with tabs[0]:
+        render_yoy_dimension(yoy_store, "점포명", "점포별 전년 대비 매출")
+    with tabs[1]:
+        render_yoy_dimension(yoy_brand, "브랜드", "브랜드별 전년 대비 매출")
+    with tabs[2]:
+        render_yoy_dimension(
+            yoy_category,
+            "카테고리",
+            "카테고리별 전년 대비 매출",
+            top_n=10,
         )
 
 
@@ -1483,6 +1848,9 @@ elif selected_menu == "브랜드 · 점포":
             fig.update_layout(legend=dict(orientation="h", y=1.08, x=0))
             st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
+elif selected_menu == "전년 매출 비교":
+    render_yoy_page()
+
 elif selected_menu == "AI 인사이트":
     render_kpis()
     render_insight_cards()
@@ -1577,9 +1945,3 @@ elif selected_menu == "AI 액션":
 else:
     render_kpis()
     render_full_table(520)
-
-
-
-
-
-
