@@ -10,7 +10,7 @@ import streamlit as st
 
 
 # =========================================================
-# VERSION: V40 - upgrade AI Insight with YoY growth signals and inventory risk summary
+# VERSION: V41 - add store diagnosis using YoY growth, portfolio concentration, discount rate, and stock turnover
 # PAGE CONFIG
 # =========================================================
 
@@ -615,6 +615,282 @@ def build_yoy_comparison(
     return comparison.sort_values("당해매출", ascending=False).reset_index(drop=True)
 
 
+
+def build_store_diagnosis(
+    sales_df: pd.DataFrame,
+    prior_sales_df: pd.DataFrame,
+    summary_df: pd.DataFrame,
+    store_perf_df: pd.DataFrame,
+) -> tuple[pd.DataFrame, float]:
+    """Diagnose each store using sales growth, mix concentration, discount, and sell-through."""
+    sales_style = find_col(sales_df, ["스타일코드"])
+    sales_store = find_col(sales_df, ["점포명", "매장명", "점포"])
+    sales_qty = find_col(sales_df, ["판매수량", "판매수량_1", "수량"])
+    sales_amount = find_col(
+        sales_df,
+        ["실판매금액", "판매금액", "매출금액", "총판매", "매출"],
+    )
+    sales_brand = find_col(sales_df, ["서브브랜드명", "브랜드명", "브랜드"])
+    sales_category = find_col(sales_df, ["아이템", "카테고리", "품목"])
+
+    summary_style = find_col(summary_df, ["스타일코드"])
+    summary_brand = find_col(summary_df, ["서브브랜드명", "브랜드명", "브랜드"])
+    summary_category = find_col(summary_df, ["아이템", "카테고리", "품목"])
+    summary_price = find_col(summary_df, ["현판가", "정상가", "판매가"])
+
+    required = [sales_style, sales_store, sales_qty, sales_amount, summary_style]
+    if any(col is None for col in required):
+        return pd.DataFrame(), 0.0
+
+    meta_cols = [summary_style]
+    for col in [summary_brand, summary_category, summary_price]:
+        if col and col not in meta_cols:
+            meta_cols.append(col)
+
+    style_meta = (
+        summary_df[meta_cols]
+        .dropna(subset=[summary_style])
+        .drop_duplicates(subset=[summary_style])
+        .copy()
+    )
+    style_meta[summary_style] = style_meta[summary_style].astype(str).str.strip()
+    style_meta = style_meta.set_index(summary_style)
+
+    detail = pd.DataFrame(
+        {
+            "스타일코드": sales_df[sales_style].astype(str).str.strip(),
+            "점포명": sales_df[sales_store].astype(str).str.strip(),
+            "판매수량": to_number(sales_df[sales_qty]),
+            "매출": to_number(sales_df[sales_amount]),
+        }
+    )
+
+    if sales_brand:
+        detail["브랜드"] = sales_df[sales_brand].fillna("미분류").astype(str).str.strip()
+    elif summary_brand:
+        detail["브랜드"] = (
+            detail["스타일코드"]
+            .map(style_meta[summary_brand])
+            .fillna("미분류")
+            .astype(str)
+        )
+    else:
+        detail["브랜드"] = "미분류"
+
+    if sales_category:
+        detail["카테고리"] = sales_df[sales_category].fillna("미분류").astype(str).str.strip()
+    elif summary_category:
+        detail["카테고리"] = (
+            detail["스타일코드"]
+            .map(style_meta[summary_category])
+            .fillna("미분류")
+            .astype(str)
+        )
+    else:
+        detail["카테고리"] = "미분류"
+
+    if summary_price:
+        detail["현판가"] = to_number(
+            detail["스타일코드"].map(style_meta[summary_price]).fillna(0)
+        )
+    else:
+        detail["현판가"] = 0
+
+    detail = detail[detail["점포명"].ne("")].copy()
+    detail["정상가매출"] = detail["판매수량"] * detail["현판가"]
+
+    store_diag = (
+        detail.groupby("점포명", as_index=False)
+        .agg(
+            당해매출=("매출", "sum"),
+            판매수량=("판매수량", "sum"),
+            정상가매출=("정상가매출", "sum"),
+        )
+    )
+    store_diag["평균할인율"] = store_diag.apply(
+        lambda row: max(
+            0.0,
+            min(
+                100.0,
+                (1 - row["당해매출"] / row["정상가매출"]) * 100,
+            ),
+        )
+        if row["정상가매출"] > 0
+        else 0.0,
+        axis=1,
+    ).round(1)
+
+    brand_mix = (
+        detail.groupby(["점포명", "브랜드"], as_index=False)["매출"].sum()
+    )
+    brand_mix["점포매출"] = brand_mix.groupby("점포명")["매출"].transform("sum")
+    brand_mix["브랜드비중"] = brand_mix.apply(
+        lambda row: row["매출"] / row["점포매출"] * 100
+        if row["점포매출"] > 0
+        else 0,
+        axis=1,
+    )
+    top_brand = (
+        brand_mix.sort_values(
+            ["점포명", "브랜드비중", "매출"],
+            ascending=[True, False, False],
+        )
+        .groupby("점포명", as_index=False)
+        .head(1)[["점포명", "브랜드", "브랜드비중"]]
+        .rename(columns={"브랜드": "주요브랜드"})
+    )
+
+    category_mix = (
+        detail.groupby(["점포명", "카테고리"], as_index=False)["매출"].sum()
+    )
+    category_mix["점포매출"] = category_mix.groupby("점포명")["매출"].transform("sum")
+    category_mix["카테고리비중"] = category_mix.apply(
+        lambda row: row["매출"] / row["점포매출"] * 100
+        if row["점포매출"] > 0
+        else 0,
+        axis=1,
+    )
+    top_category = (
+        category_mix.sort_values(
+            ["점포명", "카테고리비중", "매출"],
+            ascending=[True, False, False],
+        )
+        .groupby("점포명", as_index=False)
+        .head(1)[["점포명", "카테고리", "카테고리비중"]]
+        .rename(columns={"카테고리": "주요카테고리"})
+    )
+
+    store_diag = store_diag.merge(top_brand, on="점포명", how="left")
+    store_diag = store_diag.merge(top_category, on="점포명", how="left")
+
+    overall_yoy_rate = 0.0
+    store_diag["전년매출"] = 0.0
+    store_diag["매출증감률"] = float("nan")
+
+    if prior_sales_df is not None and not prior_sales_df.empty:
+        prior_store_col = find_col(prior_sales_df, ["점포명", "매장명", "점포"])
+        prior_amount_col = find_col(
+            prior_sales_df,
+            ["실판매금액", "판매금액", "매출금액", "총판매", "매출"],
+        )
+        if prior_store_col and prior_amount_col:
+            prior_store = pd.DataFrame(
+                {
+                    "점포명": prior_sales_df[prior_store_col].astype(str).str.strip(),
+                    "전년매출": to_number(prior_sales_df[prior_amount_col]),
+                }
+            )
+            prior_store = prior_store.groupby("점포명", as_index=False)["전년매출"].sum()
+            store_diag = store_diag.drop(columns=["전년매출", "매출증감률"])
+            store_diag = store_diag.merge(prior_store, on="점포명", how="left")
+            store_diag["전년매출"] = store_diag["전년매출"].fillna(0)
+            store_diag["매출증감률"] = store_diag.apply(
+                lambda row: (row["당해매출"] - row["전년매출"])
+                / row["전년매출"]
+                * 100
+                if row["전년매출"] > 0
+                else float("nan"),
+                axis=1,
+            ).round(1)
+
+            prior_total = float(store_diag["전년매출"].sum())
+            current_total = float(store_diag["당해매출"].sum())
+            overall_yoy_rate = (
+                (current_total - prior_total) / prior_total * 100
+                if prior_total > 0
+                else 0.0
+            )
+
+    perf_cols = [
+        col for col in ["점포명", "판매율", "재고", "판매", "면적당판매"]
+        if col in store_perf_df.columns
+    ]
+    if perf_cols:
+        store_diag = store_diag.merge(
+            store_perf_df[perf_cols].drop_duplicates(subset=["점포명"]),
+            on="점포명",
+            how="left",
+        )
+
+    for col in ["판매율", "재고", "판매", "면적당판매"]:
+        if col not in store_diag.columns:
+            store_diag[col] = 0.0
+    store_diag[["판매율", "재고", "판매"]] = store_diag[
+        ["판매율", "재고", "판매"]
+    ].fillna(0)
+
+    def classify_store(row: pd.Series) -> pd.Series:
+        score = 0
+        signals: list[tuple[int, str, str]] = []
+
+        yoy = row.get("매출증감률")
+        brand_share = float(row.get("브랜드비중", 0) or 0)
+        category_share = float(row.get("카테고리비중", 0) or 0)
+        discount_rate = float(row.get("평균할인율", 0) or 0)
+        sell_rate = float(row.get("판매율", 0) or 0)
+
+        if pd.notna(yoy):
+            yoy = float(yoy)
+            if yoy < 0:
+                score += 3
+                signals.append((6, "매출 하락", "하락 원인 브랜드·품목 우선 점검"))
+            elif yoy < overall_yoy_rate - 1.5:
+                score += 1
+                signals.append((5, "성장 둔화", "전체 성장률 대비 부진 원인 점검"))
+
+        if discount_rate >= 15:
+            score += 2
+            signals.append((6, "할인 의존", "정상가 판매력 및 할인 구간 점검"))
+        elif discount_rate >= 10:
+            score += 1
+            signals.append((2, "할인율 점검", "할인율 상승 원인 점검"))
+
+        if brand_share >= 35:
+            score += 2
+            signals.append((6, "브랜드 편중", "상위 브랜드 의존도 완화"))
+        elif brand_share >= 25:
+            score += 1
+            signals.append((2, "브랜드 집중", "브랜드 구성 균형 점검"))
+
+        if category_share >= 60:
+            score += 2
+            signals.append((4, "카테고리 편중", "저비중 카테고리 보강 검토"))
+        elif category_share >= 55:
+            score += 1
+            signals.append((2, "카테고리 집중", "카테고리 구성 균형 점검"))
+
+        if sell_rate < 55:
+            score += 2
+            signals.append((6, "재고 회전 저하", "점출·재고 축소 우선 검토"))
+        elif sell_rate < 60:
+            score += 1
+            signals.append((2, "판매율 점검", "재고 소진 속도 점검"))
+
+        if score >= 4:
+            status = "🔴 집중관리"
+        elif score >= 2:
+            status = "🟡 점검필요"
+        else:
+            status = "🔵 안정"
+
+        signals = sorted(signals, key=lambda item: item[0], reverse=True)
+        diagnosis_text = " · ".join(item[1] for item in signals[:2]) if signals else "균형 운영"
+        action_text = signals[0][2] if signals else "현재 운영 유지·모니터링"
+
+        return pd.Series([status, score, diagnosis_text, action_text])
+
+    store_diag[["점포상태", "위험점수", "핵심진단", "추천조치"]] = store_diag.apply(
+        classify_store,
+        axis=1,
+    )
+
+    return store_diag.sort_values(
+        ["위험점수", "매출증감률", "판매율"],
+        ascending=[False, True, True],
+        na_position="last",
+    ).reset_index(drop=True), overall_yoy_rate
+
+
 def format_number_cols(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
     for col in out.columns:
@@ -653,10 +929,10 @@ def render_html_table(
 
         text = str(value)
 
-        if col == "상태":
-            if "판매부진" in text or "위험" in text:
+        if col in ["상태", "점포상태"]:
+            if "판매부진" in text or "위험" in text or "집중관리" in text:
                 cls = "badge-red"
-            elif "주의" in text:
+            elif "주의" in text or "점검필요" in text:
                 cls = "badge-amber"
             else:
                 cls = "badge-green"
@@ -677,11 +953,11 @@ def render_html_table(
             numeric = float(value)
             if col == "GAP":
                 return f"{numeric:.1f}%p", "num negative" if numeric < 0 else "num"
-            if col == "증감률":
+            if col in ["증감률", "매출증감률"]:
                 return f"{numeric:+.1f}%", "num negative" if numeric < 0 else "num"
             if col == "증감액":
                 return f"{numeric:+,.0f}", "num negative" if numeric < 0 else "num"
-            if "율" in col:
+            if "율" in col or "비중" in col:
                 return f"{numeric:.1f}%", "num"
             if col == "면적당판매":
                 return f"{numeric:,.2f}", "num"
@@ -1193,6 +1469,15 @@ if not store_master.empty:
                 lambda x: x["판매"] / x[area_col] if x[area_col] > 0 else 0,
                 axis=1,
             ).round(2)
+
+# Store diagnosis: full-portfolio benchmark, independent of sidebar filters
+store_diagnosis_df, store_overall_yoy_rate = build_store_diagnosis(
+    sales,
+    prior_sales,
+    summary,
+    store_perf_summary,
+)
+
 
 # Warehouse allocation
 if inv_type_col:
@@ -1824,6 +2109,95 @@ def render_brand_store_charts() -> None:
                 st.info("점포 분석을 위한 컬럼을 찾을 수 없습니다.")
 
 
+
+def render_store_diagnosis() -> None:
+    st.markdown('<div class="section-label">AI 점포 진단</div>', unsafe_allow_html=True)
+
+    if store_diagnosis_df.empty:
+        st.info("점포 진단에 필요한 판매·재고 데이터를 확인할 수 없습니다.")
+        return
+
+    focus_count = int(
+        store_diagnosis_df["점포상태"].astype(str).str.contains("집중관리").sum()
+    )
+    slowdown_count = int(
+        store_diagnosis_df["매출증감률"].apply(
+            lambda value: pd.notna(value)
+            and (
+                float(value) < 0
+                or float(value) < store_overall_yoy_rate - 1.5
+            )
+        ).sum()
+    )
+    concentration_count = int(
+        (
+            (store_diagnosis_df["브랜드비중"] >= 25)
+            | (store_diagnosis_df["카테고리비중"] >= 60)
+        ).sum()
+    )
+    discount_count = int((store_diagnosis_df["평균할인율"] >= 15).sum())
+
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        action_card(
+            "집중 관리 점포",
+            f"{focus_count}개",
+            "복수 위험 신호가 겹친 우선 점검 대상",
+            RED,
+        )
+    with c2:
+        action_card(
+            "성장 둔화·하락",
+            f"{slowdown_count}개",
+            "전체 성장률 대비 1.5%p 이상 낮거나 역성장",
+            AMBER,
+        )
+    with c3:
+        action_card(
+            "구성 편중 점포",
+            f"{concentration_count}개",
+            "브랜드 또는 카테고리 매출 집중도 점검",
+            BLUE,
+        )
+    with c4:
+        action_card(
+            "할인 의존 점포",
+            f"{discount_count}개",
+            "가중 평균 할인율 15% 이상",
+            GREEN if discount_count == 0 else PURPLE,
+        )
+
+    view = store_diagnosis_df.copy()
+    view["브랜드 집중"] = view.apply(
+        lambda row: f"{row['주요브랜드']} {float(row['브랜드비중']):.1f}%",
+        axis=1,
+    )
+    view["카테고리 집중"] = view.apply(
+        lambda row: f"{row['주요카테고리']} {float(row['카테고리비중']):.1f}%",
+        axis=1,
+    )
+
+    table_cols = [
+        "점포명",
+        "점포상태",
+        "매출증감률",
+        "판매율",
+        "브랜드 집중",
+        "카테고리 집중",
+        "평균할인율",
+        "핵심진단",
+        "추천조치",
+    ]
+    view = view[table_cols]
+
+    render_html_table(
+        view,
+        "점포별 AI 진단",
+        "전체 포트폴리오 기준 · 전년 성장, 구성 편중, 할인율, 재고 회전을 종합 진단",
+        [9, 10, 9, 8, 13, 14, 9, 13, 15],
+    )
+
+
 def render_action_cards() -> None:
     st.markdown('<div class="section-label">AI Action</div>', unsafe_allow_html=True)
     a1, a2, a3 = st.columns(3)
@@ -2034,6 +2408,8 @@ elif selected_menu == "브랜드 · 점포":
             style_plot(fig, 220)
             fig.update_layout(legend=dict(orientation="h", y=1.08, x=0))
             st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+    render_store_diagnosis()
 
 elif selected_menu == "전년 매출 비교":
     render_yoy_page()
