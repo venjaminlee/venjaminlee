@@ -10,7 +10,7 @@ import streamlit as st
 
 
 # =========================================================
-# VERSION: V39.1 - fix YoY chart legend overlap and keep legend above the first bar
+# VERSION: V40 - upgrade AI Insight with YoY growth signals and inventory risk summary
 # PAGE CONFIG
 # =========================================================
 
@@ -1468,48 +1468,231 @@ def render_yoy_page() -> None:
         )
 
 
+def _valid_yoy_rows(comparison_df: pd.DataFrame, dimension: str) -> pd.DataFrame:
+    """Return comparable rows with a valid prior-year base."""
+    if comparison_df is None or comparison_df.empty:
+        return pd.DataFrame()
+
+    view = comparison_df.copy()
+    view = view[view["전년매출"] > 0].copy()
+    view = view[view["증감률"].notna()].copy()
+    view[dimension] = view[dimension].fillna("미분류").astype(str).str.strip()
+    view = view[~view[dimension].isin(["", "미분류", "nan", "None"])].copy()
+    return view
+
+
+def _growth_label(rate: float, dimension_name: str, overall_rate: float) -> str:
+    if rate < 0:
+        return f"매출 하락 {dimension_name}"
+    if rate < overall_rate:
+        return f"성장 둔화 {dimension_name}"
+    return f"최저 성장 {dimension_name}"
+
+
 def render_insight_cards() -> None:
     st.markdown('<div class="section-label">AI Insight</div>', unsafe_allow_html=True)
 
-    reason_desc = {
-        "목표 미달 + 재고 과다": "판매 회복과 재고 소진을 함께 검토해야 하는 상품입니다.",
-        "목표 대비 판매 부진": "목표 판매율 대비 판매 속도가 부족한 상품입니다.",
-        "재고 과다": "판매수량 대비 보유 재고가 높은 상품입니다.",
-        "판매 저조": "총판매율이 낮아 추가 관찰이 필요한 상품입니다.",
-        "시즌 경과 체화 우려": "경과 기간 대비 재고 소진 속도가 느린 상품입니다.",
-    }
+    # Prior-year data converts the cards from current-state counts into change signals.
+    if yoy_available:
+        brand_rows = _valid_yoy_rows(yoy_brand, "브랜드")
+        store_rows = _valid_yoy_rows(yoy_store, "점포명")
 
-    reason_counts = (
-        filter_df.loc[filter_df["문제원인"] != "정상 범위", "문제원인"]
-        .value_counts()
-        .head(3)
-    )
-
-    insight_items = []
-    for reason, count in reason_counts.items():
-        insight_items.append(
+        direction = "증가" if yoy_amount_gap >= 0 else "감소"
+        insight_items = [
             (
-                str(reason),
-                f"{int(count)}개",
-                reason_desc.get(str(reason), "우선 확인이 필요한 문제 유형입니다."),
+                "전체 매출 성장" if yoy_rate >= 0 else "전체 매출 하락",
+                f"{yoy_rate:+.1f}%",
+                f"전년 대비 {format_krw(abs(yoy_amount_gap))} {direction}한 흐름입니다.",
+                GREEN if yoy_rate >= 0 else RED,
             )
+        ]
+
+        if not brand_rows.empty:
+            leader = brand_rows.sort_values(
+                ["증감률", "증감액"], ascending=[False, False]
+            ).iloc[0]
+            leader_name = str(leader["브랜드"])
+            leader_rate = float(leader["증감률"])
+            gap_vs_total = leader_rate - yoy_rate
+            insight_items.append(
+                (
+                    "성장 선도 브랜드" if leader_rate >= 0 else "브랜드 최대 하락",
+                    f"{leader_name} {leader_rate:+.1f}%",
+                    (
+                        f"전체 성장률보다 {abs(gap_vs_total):.1f}%p "
+                        f"{'높은' if gap_vs_total >= 0 else '낮은'} 성과입니다."
+                    ),
+                    BLUE if leader_rate >= 0 else RED,
+                )
+            )
+
+        if not store_rows.empty:
+            laggard = store_rows.sort_values(
+                ["증감률", "증감액"], ascending=[True, True]
+            ).iloc[0]
+            laggard_name = str(laggard["점포명"])
+            laggard_rate = float(laggard["증감률"])
+            lag_gap = yoy_rate - laggard_rate
+
+            if laggard_rate < 0:
+                lag_desc = (
+                    f"전년 대비 {format_krw(abs(float(laggard['증감액'])))} 감소해 "
+                    "원인 점검이 필요합니다."
+                )
+                lag_accent = RED
+            else:
+                lag_desc = (
+                    f"전체 성장률보다 {max(lag_gap, 0):.1f}%p 낮아 "
+                    "점포별 성장 요인 점검이 필요합니다."
+                )
+                lag_accent = AMBER
+
+            insight_items.append(
+                (
+                    _growth_label(laggard_rate, "점포", yoy_rate),
+                    f"{laggard_name} {laggard_rate:+.1f}%",
+                    lag_desc,
+                    lag_accent,
+                )
+            )
+
+        high_risk_count = int(
+            (filter_df["문제원인"].astype(str) == "목표 미달 + 재고 과다").sum()
+        )
+        while len(insight_items) < 3:
+            insight_items.append(
+                (
+                    "재고·판매 동시 위험",
+                    f"{high_risk_count}개",
+                    "목표 미달과 재고 과다가 동시에 발생한 상품입니다.",
+                    RED if high_risk_count > 0 else GREEN,
+                )
+            )
+
+    else:
+        reason_desc = {
+            "목표 미달 + 재고 과다": "판매 회복과 재고 소진을 함께 검토해야 하는 상품입니다.",
+            "목표 대비 판매 부진": "목표 판매율 대비 판매 속도가 부족한 상품입니다.",
+            "재고 과다": "판매수량 대비 보유 재고가 높은 상품입니다.",
+            "판매 저조": "총판매율이 낮아 추가 관찰이 필요한 상품입니다.",
+            "시즌 경과 체화 우려": "경과 기간 대비 재고 소진 속도가 느린 상품입니다.",
+        }
+
+        reason_counts = (
+            filter_df.loc[filter_df["문제원인"] != "정상 범위", "문제원인"]
+            .value_counts()
+            .head(3)
         )
 
-    while len(insight_items) < 3:
-        insight_items.append(
-            (
-                "추가 주요 이슈 없음",
-                "0개",
-                "현재 필터에서 추가로 두드러지는 문제 유형이 없습니다.",
+        insight_items = []
+        fallback_accents = [RED, AMBER, BLUE]
+        for index, (reason, count) in enumerate(reason_counts.items()):
+            insight_items.append(
+                (
+                    str(reason),
+                    f"{int(count)}개",
+                    reason_desc.get(str(reason), "우선 확인이 필요한 문제 유형입니다."),
+                    fallback_accents[min(index, len(fallback_accents) - 1)],
+                )
             )
-        )
 
-    accents = [RED, AMBER, BLUE]
+        while len(insight_items) < 3:
+            insight_items.append(
+                (
+                    "추가 주요 이슈 없음",
+                    "0개",
+                    "현재 필터에서 추가로 두드러지는 문제 유형이 없습니다.",
+                    BLUE,
+                )
+            )
+
     cols = st.columns(3)
-
-    for col, (title, value, desc), accent in zip(cols, insight_items[:3], accents):
+    for col, (title, value, desc, accent) in zip(cols, insight_items[:3]):
         with col:
             insight_card(title, value, desc, accent)
+
+
+def render_ai_summary_box() -> None:
+    """Generate a concise management summary combining YoY and inventory signals."""
+    if not yoy_available:
+        return
+
+    brand_rows = _valid_yoy_rows(yoy_brand, "브랜드")
+    store_rows = _valid_yoy_rows(yoy_store, "점포명")
+    category_rows = _valid_yoy_rows(yoy_category, "카테고리")
+
+    summary_lines = []
+    direction = "증가" if yoy_amount_gap >= 0 else "감소"
+    summary_lines.append(
+        f"전체 매출은 전년 대비 <b>{yoy_rate:+.1f}%</b>, "
+        f"{format_krw(abs(yoy_amount_gap))} {direction}했습니다."
+    )
+
+    if not brand_rows.empty:
+        leader = brand_rows.sort_values(
+            ["증감률", "증감액"], ascending=[False, False]
+        ).iloc[0]
+        summary_lines.append(
+            f"<b>{html.escape(str(leader['브랜드']))}</b>가 "
+            f"<b>{float(leader['증감률']):+.1f}%</b>로 브랜드 성장을 주도했습니다."
+        )
+
+    if not store_rows.empty:
+        laggard = store_rows.sort_values(
+            ["증감률", "증감액"], ascending=[True, True]
+        ).iloc[0]
+        laggard_rate = float(laggard["증감률"])
+        if laggard_rate < 0:
+            store_text = "전년 대비 매출이 감소해 우선 점검이 필요합니다."
+        else:
+            store_text = (
+                f"전체 성장률보다 {max(yoy_rate - laggard_rate, 0):.1f}%p 낮아 "
+                "상대적으로 성장이 둔화됐습니다."
+            )
+        summary_lines.append(
+            f"<b>{html.escape(str(laggard['점포명']))}</b>은 "
+            f"<b>{laggard_rate:+.1f}%</b>로 {store_text}"
+        )
+
+    if not category_rows.empty:
+        slow_category = category_rows.sort_values(
+            ["증감률", "증감액"], ascending=[True, True]
+        ).iloc[0]
+        category_rate = float(slow_category["증감률"])
+        category_status = (
+            "매출이 감소했습니다"
+            if category_rate < 0
+            else "성장 속도가 가장 낮습니다"
+        )
+        summary_lines.append(
+            f"<b>{html.escape(str(slow_category['카테고리']))}</b>는 "
+            f"<b>{category_rate:+.1f}%</b>로 카테고리 중 {category_status}."
+        )
+
+    high_risk_count = int(
+        (filter_df["문제원인"].astype(str) == "목표 미달 + 재고 과다").sum()
+    )
+    summary_lines.append(
+        "목표 미달과 재고 과다가 동시에 발생한 상품은 "
+        f"<b>{high_risk_count}개</b>입니다."
+    )
+
+    line_html = "".join(
+        '<div style="margin-top:{};">• {}</div>'.format(
+            "0" if index == 0 else "5px",
+            line,
+        )
+        for index, line in enumerate(summary_lines)
+    )
+    st.markdown(
+        f"""
+        <div class="muted-box" style="margin-top:6px; margin-bottom:7px; line-height:1.45;">
+            <div style="font-weight:850; color:#1F2937; margin-bottom:4px;">AI 핵심 요약</div>
+            {line_html}
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_brand_store_charts() -> None:
@@ -1858,6 +2041,7 @@ elif selected_menu == "전년 매출 비교":
 elif selected_menu == "AI 인사이트":
     render_kpis()
     render_insight_cards()
+    render_ai_summary_box()
 
     render_priority_table(300)
 
