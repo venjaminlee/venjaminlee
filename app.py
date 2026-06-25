@@ -10,7 +10,7 @@ import streamlit as st
 
 
 # =========================================================
-# VERSION: V43 - add P5 vs carryover sales mix and carryover discount-store analysis
+# VERSION: V43.1 - fix season-mix chart legend spacing
 # PAGE CONFIG
 # =========================================================
 
@@ -2328,8 +2328,16 @@ def render_store_season_mix() -> None:
         style_plot(fig, max(280, len(chart_df) * 27))
         fig.update_layout(
             showlegend=True,
-            legend=dict(orientation="h", y=1.06, x=0, font=dict(size=9)),
-            margin=dict(l=5, r=10, t=32, b=5),
+            legend=dict(
+                orientation="h",
+                y=1.13,
+                x=0,
+                xanchor="left",
+                yanchor="bottom",
+                title_text="",
+                font=dict(size=9),
+            ),
+            margin=dict(l=5, r=10, t=58, b=5),
             xaxis=dict(
                 title="",
                 range=[0, 100],
