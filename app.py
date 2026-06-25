@@ -10,7 +10,7 @@ import streamlit as st
 
 
 # =========================================================
-# VERSION: V45 - common P5/carryover filter across operational analysis pages
+# VERSION: V46.1 - robust major-category mapping (잡화/의류/슈즈) and item detail preservation
 # PAGE CONFIG
 # =========================================================
 
@@ -500,6 +500,53 @@ def classify_season_group_value(season_code, season_name) -> str:
     return "이월"
 
 
+def classify_major_category_value(item_value) -> str:
+    """Map detailed item names to the operating major categories: 잡화, 의류, 슈즈."""
+    item = str(item_value or "").strip().lower()
+
+    apparel_keywords = [
+        "셔츠", "티셔츠", "블라우스", "니트", "가디건", "스웨터",
+        "재킷", "자켓", "코트", "점퍼", "패딩", "베스트", "후디",
+        "스웨트", "팬츠", "바지", "데님", "진", "스커트", "드레스",
+        "원피스", "탑", "폴로", "트라우저", "레깅스",
+    ]
+    shoes_keywords = [
+        "스니커즈", "로퍼", "부츠", "샌들", "펌프스", "플랫",
+        "슬리퍼", "뮬", "힐", "구두", "슈즈", "옥스포드", "더비",
+    ]
+
+    if any(keyword in item for keyword in shoes_keywords):
+        return "슈즈"
+    if any(keyword in item for keyword in apparel_keywords):
+        return "의류"
+    return "잡화"
+
+
+def ensure_major_category(df: pd.DataFrame) -> pd.DataFrame:
+    """Guarantee a usable 대분류 column, even when only detailed item data exists."""
+    if df is None or df.empty:
+        return df
+
+    out = df.copy()
+    existing_major = find_col(out, ["대분류", "카테고리대분류", "상품대분류", "대카테고리"])
+    item_col_local = find_col(out, ["아이템", "품목", "세부품목", "상품군"])
+
+    if existing_major:
+        out["대분류"] = out[existing_major].fillna("").astype(str).str.strip()
+    else:
+        out["대분류"] = ""
+
+    missing_mask = ~out["대분류"].isin(["잡화", "의류", "슈즈"])
+    if item_col_local:
+        out.loc[missing_mask, "대분류"] = out.loc[missing_mask, item_col_local].apply(
+            classify_major_category_value
+        )
+    else:
+        out.loc[missing_mask, "대분류"] = "잡화"
+
+    return out
+
+
 def to_number(series: pd.Series) -> pd.Series:
     return (
         series.astype(str)
@@ -538,7 +585,7 @@ def standardize_sales_for_yoy(
         ["실판매금액", "판매금액", "매출금액", "총판매", "매출"],
     )
     sales_brand = find_col(sales_df, ["서브브랜드명", "브랜드명", "브랜드"])
-    sales_category = find_col(sales_df, ["아이템", "카테고리", "품목"])
+    sales_category = find_col(sales_df, ["대분류", "카테고리", "품목군", "아이템"])
 
     missing = []
     if sales_style is None:
@@ -653,11 +700,11 @@ def build_store_diagnosis(
         ["실판매금액", "판매금액", "매출금액", "총판매", "매출"],
     )
     sales_brand = find_col(sales_df, ["서브브랜드명", "브랜드명", "브랜드"])
-    sales_category = find_col(sales_df, ["아이템", "카테고리", "품목"])
+    sales_category = find_col(sales_df, ["대분류", "카테고리", "품목군", "아이템"])
 
     summary_style = find_col(summary_df, ["스타일코드"])
     summary_brand = find_col(summary_df, ["서브브랜드명", "브랜드명", "브랜드"])
-    summary_category = find_col(summary_df, ["아이템", "카테고리", "품목"])
+    summary_category = find_col(summary_df, ["대분류", "카테고리", "품목군", "아이템"])
     summary_price = find_col(summary_df, ["현판가", "정상가", "판매가"])
     summary_season_code = find_col(summary_df, ["시즌코드"])
     summary_season_name = find_col(summary_df, ["시즌"])
@@ -1319,6 +1366,14 @@ prior_sales = (
     else pd.DataFrame()
 )
 
+# Standardize major categories across all workbooks.
+# This keeps 잡화/의류/슈즈 available even if an older file only has detailed item names.
+inventory = ensure_major_category(inventory)
+summary = ensure_major_category(summary)
+sales = ensure_major_category(sales)
+if not prior_sales.empty:
+    prior_sales = ensure_major_category(prior_sales)
+
 # Column mapping
 inv_style_col = find_col(inventory, ["스타일코드"])
 inv_store_col = find_col(inventory, ["점포명", "매장명", "점포"])
@@ -1332,7 +1387,8 @@ sales_amt_col = find_col(sales, ["실판매금액", "판매금액", "매출금�
 
 sum_sales_col = find_col(summary, ["누계판매수량", "누계판매", "판매수량"])
 sum_stock_col = find_col(summary, ["누계총재고수량", "누계총재고", "현재고", "재고"])
-category_col = find_col(summary, ["아이템", "카테고리", "품목"])
+category_col = find_col(summary, ["대분류"])
+item_col = find_col(summary, ["아이템", "품목", "세부품목"])
 style_col = find_col(summary, ["스타일코드"])
 style_name_col = find_col(summary, ["스타일명", "상품명"])
 brand_col = find_col(summary, ["서브브랜드명", "브랜드명"])
@@ -1369,7 +1425,7 @@ df["판매"] = to_number(df[sum_sales_col])
 df["재고"] = to_number(df[sum_stock_col])
 
 group_dict: dict[str, str] = {"판매": "sum", "재고": "sum"}
-for col in [style_name_col, category_col, brand_col, season_code_col, season_col]:
+for col in [style_name_col, category_col, item_col, brand_col, season_code_col, season_col]:
     if col:
         group_dict[col] = "first"
 
@@ -1437,7 +1493,7 @@ with st.sidebar:
         category_options = ["전체"] + sorted(
             filter_df[category_col].dropna().astype(str).unique().tolist()
         )
-        selected_category = st.selectbox("카테고리", category_options)
+        selected_category = st.selectbox("대분류", category_options)
         if selected_category != "전체":
             filter_df = filter_df[
                 filter_df[category_col].astype(str) == selected_category
@@ -1963,7 +2019,7 @@ def render_yoy_page() -> None:
         unsafe_allow_html=True,
     )
 
-    tabs = st.tabs(["점포별", "브랜드별", "카테고리별"])
+    tabs = st.tabs(["점포별", "브랜드별", "대분류별"])
     with tabs[0]:
         render_yoy_dimension(yoy_store, "점포명", "점포별 전년 대비 매출")
     with tabs[1]:
@@ -1972,7 +2028,7 @@ def render_yoy_page() -> None:
         render_yoy_dimension(
             yoy_category,
             "카테고리",
-            "카테고리별 전년 대비 매출",
+            "대분류별 전년 대비 매출",
             top_n=10,
         )
 
@@ -2594,6 +2650,7 @@ def render_priority_table(height: int = 225) -> None:
         style_name_col,
         brand_col,
         category_col,
+        item_col,
         "총판매율",
         "GAP",
         "재고",
@@ -2707,6 +2764,7 @@ def render_full_table(height: int = 330) -> None:
         style_col,
         style_name_col,
         category_col,
+        item_col,
         brand_col,
         season_col,
         "판매",
@@ -2720,7 +2778,7 @@ def render_full_table(height: int = 330) -> None:
             cols.append(col)
 
     view = filter_df[cols].sort_values(["GAP", "재고"], ascending=[True, False]).copy()
-    widths = [8, 17, 7, 9, 6, 6, 6, 8, 8, 12, 13]
+    widths = [7, 15, 7, 8, 9, 6, 6, 6, 8, 8, 10, 10]
     render_html_table(
         view,
         "상품 전체 진단",
@@ -2776,7 +2834,7 @@ elif selected_menu == "브랜드 · 점포":
 
     if not cat_perf.empty:
         with st.container(border=True):
-            st.subheader("카테고리별 판매율")
+            st.subheader("대분류별 판매율")
             fig = px.bar(
                 cat_perf,
                 x=category_col,
