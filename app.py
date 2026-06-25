@@ -10,7 +10,7 @@ import streamlit as st
 
 
 # =========================================================
-# VERSION: V41 - add store diagnosis using YoY growth, portfolio concentration, discount rate, and stock turnover
+# VERSION: V43 - add P5 vs carryover sales mix and carryover discount-store analysis
 # PAGE CONFIG
 # =========================================================
 
@@ -637,13 +637,21 @@ def build_store_diagnosis(
     summary_brand = find_col(summary_df, ["서브브랜드명", "브랜드명", "브랜드"])
     summary_category = find_col(summary_df, ["아이템", "카테고리", "품목"])
     summary_price = find_col(summary_df, ["현판가", "정상가", "판매가"])
+    summary_season_code = find_col(summary_df, ["시즌코드"])
+    summary_season_name = find_col(summary_df, ["시즌"])
 
     required = [sales_style, sales_store, sales_qty, sales_amount, summary_style]
     if any(col is None for col in required):
         return pd.DataFrame(), 0.0
 
     meta_cols = [summary_style]
-    for col in [summary_brand, summary_category, summary_price]:
+    for col in [
+        summary_brand,
+        summary_category,
+        summary_price,
+        summary_season_code,
+        summary_season_name,
+    ]:
         if col and col not in meta_cols:
             meta_cols.append(col)
 
@@ -696,6 +704,44 @@ def build_store_diagnosis(
     else:
         detail["현판가"] = 0
 
+    if summary_season_code:
+        detail["시즌코드"] = (
+            detail["스타일코드"]
+            .map(style_meta[summary_season_code])
+            .fillna("")
+            .astype(str)
+            .str.strip()
+            .str.upper()
+        )
+    else:
+        detail["시즌코드"] = ""
+
+    if summary_season_name:
+        detail["시즌명"] = (
+            detail["스타일코드"]
+            .map(style_meta[summary_season_name])
+            .fillna("")
+            .astype(str)
+            .str.strip()
+            .str.upper()
+            .str.replace(" ", "", regex=False)
+            .str.replace("/", "", regex=False)
+        )
+    else:
+        detail["시즌명"] = ""
+
+    def classify_season_group(row: pd.Series) -> str:
+        """Use P5 as current 26SS; earlier seasons are carryover, and P6 is excluded."""
+        season_code = str(row.get("시즌코드", "")).strip().upper()
+        season_name = str(row.get("시즌명", "")).strip().upper()
+
+        if season_code == "P5" or season_name in {"26SS", "2026SS"}:
+            return "P5"
+        if season_code == "P6" or season_name in {"26FW", "2026FW"}:
+            return "미래시즌"
+        return "이월"
+
+    detail["시즌구분"] = detail.apply(classify_season_group, axis=1)
     detail = detail[detail["점포명"].ne("")].copy()
     detail["정상가매출"] = detail["판매수량"] * detail["현판가"]
 
@@ -719,6 +765,92 @@ def build_store_diagnosis(
         else 0.0,
         axis=1,
     ).round(1)
+
+    # P5 (26SS) vs carryover mix. P6 is a future season and is excluded.
+    season_detail = detail[detail["시즌구분"].isin(["P5", "이월"])].copy()
+    season_mix = (
+        season_detail.groupby(["점포명", "시즌구분"], as_index=False)["매출"]
+        .sum()
+        .pivot(index="점포명", columns="시즌구분", values="매출")
+        .fillna(0)
+        .reset_index()
+    )
+    for col in ["P5", "이월"]:
+        if col not in season_mix.columns:
+            season_mix[col] = 0.0
+    season_mix = season_mix.rename(columns={"P5": "P5매출", "이월": "이월매출"})
+    season_mix["시즌분석매출"] = season_mix["P5매출"] + season_mix["이월매출"]
+    season_mix["P5매출비율"] = season_mix.apply(
+        lambda row: row["P5매출"] / row["시즌분석매출"] * 100
+        if row["시즌분석매출"] > 0
+        else 0.0,
+        axis=1,
+    ).round(1)
+    season_mix["이월매출비율"] = season_mix.apply(
+        lambda row: row["이월매출"] / row["시즌분석매출"] * 100
+        if row["시즌분석매출"] > 0
+        else 0.0,
+        axis=1,
+    ).round(1)
+
+    carryover_detail = season_detail[season_detail["시즌구분"] == "이월"].copy()
+    carryover_mix = (
+        carryover_detail.groupby("점포명", as_index=False)
+        .agg(
+            이월매출=("매출", "sum"),
+            이월정상가매출=("정상가매출", "sum"),
+        )
+    )
+    carryover_mix["이월평균할인율"] = carryover_mix.apply(
+        lambda row: max(
+            0.0,
+            min(
+                100.0,
+                (1 - row["이월매출"] / row["이월정상가매출"]) * 100,
+            ),
+        )
+        if row["이월정상가매출"] > 0
+        else 0.0,
+        axis=1,
+    ).round(1)
+
+    season_mix = season_mix.merge(
+        carryover_mix[["점포명", "이월평균할인율"]],
+        on="점포명",
+        how="left",
+    )
+    season_mix["이월평균할인율"] = season_mix["이월평균할인율"].fillna(0.0)
+
+    def classify_season_operation(row: pd.Series) -> str:
+        carryover_share = float(row.get("이월매출비율", 0) or 0)
+        p5_share = float(row.get("P5매출비율", 0) or 0)
+        carryover_discount = float(row.get("이월평균할인율", 0) or 0)
+
+        if carryover_share >= 55 and carryover_discount >= 15:
+            return "이월 할인 판매형"
+        if carryover_share >= 55:
+            return "이월 판매 강점형"
+        if p5_share >= 65:
+            return "P5 중심형"
+        return "균형 운영형"
+
+    season_mix["시즌운영유형"] = season_mix.apply(
+        classify_season_operation,
+        axis=1,
+    )
+    store_diag = store_diag.merge(season_mix, on="점포명", how="left")
+    for col in [
+        "P5매출",
+        "이월매출",
+        "시즌분석매출",
+        "P5매출비율",
+        "이월매출비율",
+        "이월평균할인율",
+    ]:
+        if col not in store_diag.columns:
+            store_diag[col] = 0.0
+        store_diag[col] = store_diag[col].fillna(0.0)
+    store_diag["시즌운영유형"] = store_diag["시즌운영유형"].fillna("분석 제외")
 
     brand_mix = (
         detail.groupby(["점포명", "브랜드"], as_index=False)["매출"].sum()
@@ -2110,6 +2242,130 @@ def render_brand_store_charts() -> None:
 
 
 
+def render_store_season_mix() -> None:
+    st.markdown('<div class="section-label">점포별 시즌 판매 구성</div>', unsafe_allow_html=True)
+
+    required_cols = {
+        "점포명",
+        "P5매출",
+        "이월매출",
+        "P5매출비율",
+        "이월매출비율",
+        "이월평균할인율",
+        "시즌운영유형",
+    }
+    if store_diagnosis_df.empty or not required_cols.issubset(store_diagnosis_df.columns):
+        st.info("시즌 판매 구성 분석에 필요한 시즌 데이터를 확인할 수 없습니다.")
+        return
+
+    season_view = store_diagnosis_df.copy()
+    season_view = season_view[season_view["P5매출"] + season_view["이월매출"] > 0].copy()
+    if season_view.empty:
+        st.info("P5 및 이월 상품 판매 데이터가 없습니다.")
+        return
+
+    top_share = season_view.sort_values("이월매출비율", ascending=False).iloc[0]
+    top_amount = season_view.sort_values("이월매출", ascending=False).iloc[0]
+    carryover_rows = season_view[season_view["이월매출"] > 0].copy()
+    top_discount = (
+        carryover_rows.sort_values("이월평균할인율", ascending=False).iloc[0]
+        if not carryover_rows.empty
+        else None
+    )
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        insight_card(
+            "이월 매출 비중 TOP",
+            f"{top_share['점포명']} {float(top_share['이월매출비율']):.1f}%",
+            "전체 시즌 매출 중 이월 상품 판매 비중이 가장 높은 점포",
+            BLUE,
+        )
+    with c2:
+        insight_card(
+            "이월 매출액 TOP",
+            f"{top_amount['점포명']} {format_krw(float(top_amount['이월매출']))}",
+            "이월 상품 절대 매출액이 가장 높은 점포",
+            GREEN,
+        )
+    with c3:
+        if top_discount is not None:
+            insight_card(
+                "이월 할인율 TOP",
+                f"{top_discount['점포명']} {float(top_discount['이월평균할인율']):.1f}%",
+                "이월 상품의 가중 평균 할인율이 가장 높은 점포",
+                AMBER,
+            )
+        else:
+            insight_card("이월 할인율 TOP", "-", "이월 판매 데이터가 없습니다.", AMBER)
+
+    chart_df = season_view.sort_values("이월매출비율", ascending=True).copy()
+    long_df = chart_df.melt(
+        id_vars=["점포명"],
+        value_vars=["P5매출비율", "이월매출비율"],
+        var_name="시즌구분",
+        value_name="매출비율",
+    )
+    long_df["시즌구분"] = long_df["시즌구분"].replace(
+        {"P5매출비율": "P5 당해", "이월매출비율": "이월"}
+    )
+
+    with st.container(border=True):
+        st.subheader("점포별 P5 · 이월 매출 구성비")
+        fig = px.bar(
+            long_df,
+            x="매출비율",
+            y="점포명",
+            color="시즌구분",
+            barmode="stack",
+            orientation="h",
+            color_discrete_map={"P5 당해": BLUE, "이월": AMBER},
+            category_orders={"점포명": chart_df["점포명"].tolist()},
+        )
+        fig.update_traces(
+            hovertemplate="%{y}<br>%{fullData.name}: %{x:.1f}%<extra></extra>",
+        )
+        style_plot(fig, max(280, len(chart_df) * 27))
+        fig.update_layout(
+            showlegend=True,
+            legend=dict(orientation="h", y=1.06, x=0, font=dict(size=9)),
+            margin=dict(l=5, r=10, t=32, b=5),
+            xaxis=dict(
+                title="",
+                range=[0, 100],
+                ticksuffix="%",
+                showgrid=True,
+                gridcolor="#EEF1F5",
+                zeroline=False,
+                tickfont=dict(size=10),
+            ),
+        )
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+    table_view = season_view[[
+        "점포명",
+        "P5매출비율",
+        "이월매출비율",
+        "이월평균할인율",
+        "시즌운영유형",
+    ]].copy()
+    table_view = table_view.rename(
+        columns={
+            "P5매출비율": "P5 매출비율",
+            "이월매출비율": "이월 매출비율",
+            "이월평균할인율": "이월 할인율",
+            "시즌운영유형": "시즌 운영 유형",
+        }
+    )
+    table_view = table_view.sort_values("이월 매출비율", ascending=False)
+    render_html_table(
+        table_view,
+        "점포별 시즌 운영 유형",
+        "현재 시즌 P5(26SS)와 이월 상품 매출 구성 · P6(26FW)는 분석 제외",
+        [22, 17, 17, 17, 27],
+    )
+
+
 def render_store_diagnosis() -> None:
     st.markdown('<div class="section-label">AI 점포 진단</div>', unsafe_allow_html=True)
 
@@ -2409,6 +2665,7 @@ elif selected_menu == "브랜드 · 점포":
             fig.update_layout(legend=dict(orientation="h", y=1.08, x=0))
             st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
+    render_store_season_mix()
     render_store_diagnosis()
 
 elif selected_menu == "전년 매출 비교":
@@ -2509,3 +2766,4 @@ elif selected_menu == "AI 액션":
 else:
     render_kpis()
     render_full_table(520)
+
