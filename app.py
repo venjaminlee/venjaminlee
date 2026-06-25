@@ -10,7 +10,7 @@ import streamlit as st
 
 
 # =========================================================
-# VERSION: V43.1 - fix season-mix chart legend spacing
+# VERSION: V45 - common P5/carryover filter across operational analysis pages
 # PAGE CONFIG
 # =========================================================
 
@@ -478,6 +478,28 @@ def find_col(df: pd.DataFrame, candidates: list[str]) -> str | None:
     return None
 
 
+def classify_season_group_value(season_code, season_name) -> str:
+    """Classify products for the current 26SS operating view.
+
+    P5/26SS is the current season, P6/26FW is excluded as a future season,
+    and all earlier seasons are treated as carryover inventory.
+    """
+    code = str(season_code or "").strip().upper()
+    name = (
+        str(season_name or "")
+        .strip()
+        .upper()
+        .replace(" ", "")
+        .replace("/", "")
+    )
+
+    if code == "P5" or name in {"26SS", "2026SS"}:
+        return "P5"
+    if code == "P6" or name in {"26FW", "2026FW"}:
+        return "미래시즌"
+    return "이월"
+
+
 def to_number(series: pd.Series) -> pd.Series:
     return (
         series.astype(str)
@@ -730,18 +752,13 @@ def build_store_diagnosis(
     else:
         detail["시즌명"] = ""
 
-    def classify_season_group(row: pd.Series) -> str:
-        """Use P5 as current 26SS; earlier seasons are carryover, and P6 is excluded."""
-        season_code = str(row.get("시즌코드", "")).strip().upper()
-        season_name = str(row.get("시즌명", "")).strip().upper()
-
-        if season_code == "P5" or season_name in {"26SS", "2026SS"}:
-            return "P5"
-        if season_code == "P6" or season_name in {"26FW", "2026FW"}:
-            return "미래시즌"
-        return "이월"
-
-    detail["시즌구분"] = detail.apply(classify_season_group, axis=1)
+    detail["시즌구분"] = detail.apply(
+        lambda row: classify_season_group_value(
+            row.get("시즌코드", ""),
+            row.get("시즌명", ""),
+        ),
+        axis=1,
+    )
     detail = detail[detail["점포명"].ne("")].copy()
     detail["정상가매출"] = detail["판매수량"] * detail["현판가"]
 
@@ -1319,6 +1336,7 @@ category_col = find_col(summary, ["아이템", "카테고리", "품목"])
 style_col = find_col(summary, ["스타일코드"])
 style_name_col = find_col(summary, ["스타일명", "상품명"])
 brand_col = find_col(summary, ["서브브랜드명", "브랜드명"])
+season_code_col = find_col(summary, ["시즌코드"])
 season_col = find_col(summary, ["시즌"])
 
 required = {
@@ -1351,11 +1369,22 @@ df["판매"] = to_number(df[sum_sales_col])
 df["재고"] = to_number(df[sum_stock_col])
 
 group_dict: dict[str, str] = {"판매": "sum", "재고": "sum"}
-for col in [style_name_col, category_col, brand_col, season_col]:
+for col in [style_name_col, category_col, brand_col, season_code_col, season_col]:
     if col:
         group_dict[col] = "first"
 
 diagnosis = df.groupby(style_col).agg(group_dict).reset_index()
+
+# Current operating season: P5 (26SS). P6 is a future season and is excluded.
+diagnosis["시즌구분"] = diagnosis.apply(
+    lambda row: classify_season_group_value(
+        row.get(season_code_col, "") if season_code_col else "",
+        row.get(season_col, "") if season_col else "",
+    ),
+    axis=1,
+)
+diagnosis = diagnosis[diagnosis["시즌구분"] != "미래시즌"].copy()
+
 diagnosis["총판매율"] = diagnosis.apply(
     lambda x: x["판매"] / (x["판매"] + x["재고"]) * 100
     if (x["판매"] + x["재고"]) > 0
@@ -1378,15 +1407,35 @@ diagnosis["문제원인"] = diagnosis.apply(diagnose_reason, axis=1)
 
 # Sidebar filters
 filter_df = diagnosis.copy()
+selected_season_group = "전체"
 selected_category = "전체"
 selected_brand = "전체"
+season_filter_map = {
+    "전체": None,
+    "P5 당해 상품": "P5",
+    "이월 상품": "이월",
+}
 with st.sidebar:
     st.divider()
     st.markdown("### 분석 필터")
 
+    selected_season_group = st.selectbox(
+        "상품 구분",
+        list(season_filter_map.keys()),
+        help=(
+            "대시보드·브랜드/점포·AI 인사이트·AI 액션·상세 진단에 적용됩니다. "
+            "전년 매출 비교는 전체 시즌 기준을 유지합니다."
+        ),
+    )
+    selected_season_value = season_filter_map[selected_season_group]
+    if selected_season_value:
+        filter_df = filter_df[
+            filter_df["시즌구분"].astype(str) == selected_season_value
+        ]
+
     if category_col:
         category_options = ["전체"] + sorted(
-            diagnosis[category_col].dropna().astype(str).unique().tolist()
+            filter_df[category_col].dropna().astype(str).unique().tolist()
         )
         selected_category = st.selectbox("카테고리", category_options)
         if selected_category != "전체":
@@ -1403,6 +1452,22 @@ with st.sidebar:
             filter_df = filter_df[
                 filter_df[brand_col].astype(str) == selected_brand
             ]
+
+analysis_scope_label = selected_season_group
+selected_style_codes = set(
+    filter_df[style_col].dropna().astype(str).str.strip().tolist()
+)
+
+# Operational pages use the same selected style universe.
+analysis_inventory = inventory[
+    inventory[inv_style_col].astype(str).str.strip().isin(selected_style_codes)
+].copy()
+analysis_sales = sales[
+    sales[sales_style_col].astype(str).str.strip().isin(selected_style_codes)
+].copy()
+analysis_summary = summary[
+    summary[style_col].astype(str).str.strip().isin(selected_style_codes)
+].copy()
 
 # YoY revenue comparison (optional prior-year upload)
 yoy_available = False
@@ -1464,6 +1529,10 @@ if prior_sales_file:
         yoy_category = build_yoy_comparison(yoy_current, yoy_prior, "카테고리")
         yoy_available = True
 
+# Season-filtered operational pages intentionally do not mix current-season analysis
+# with whole-period prior-year comparisons.
+use_yoy_insights = yoy_available and selected_season_group == "전체"
+
 
 # Summary KPI
 # Executive Dashboard shows only current operating facts.
@@ -1495,7 +1564,7 @@ rec_df = pd.DataFrame()
 allocation = pd.DataFrame()
 store_perf_summary = pd.DataFrame()
 
-store_stock_only = inventory.copy()
+store_stock_only = analysis_inventory.copy()
 if inv_type_col:
     store_stock_only = store_stock_only[
         ~store_stock_only[inv_type_col].astype(str).str.contains("창고", na=False)
@@ -1507,7 +1576,7 @@ stock_by_store_style = (
     .reset_index()
 )
 sales_by_store_style = (
-    sales.groupby([sales_style_col, sales_store_col])[sales_qty_col]
+    analysis_sales.groupby([sales_style_col, sales_store_col])[sales_qty_col]
     .sum()
     .reset_index()
 )
@@ -1556,7 +1625,7 @@ rec_df = pd.DataFrame(recommendations)
 stock_store_sum = (
     store_stock_only.groupby(inv_store_col)[inv_stock_col].sum().reset_index()
 )
-sales_store_sum = sales.groupby(sales_store_col)[sales_qty_col].sum().reset_index()
+sales_store_sum = analysis_sales.groupby(sales_store_col)[sales_qty_col].sum().reset_index()
 stock_store_sum.columns = ["점포명", "재고"]
 sales_store_sum.columns = ["점포명", "판매"]
 
@@ -1602,19 +1671,42 @@ if not store_master.empty:
                 axis=1,
             ).round(2)
 
-# Store diagnosis: full-portfolio benchmark, independent of sidebar filters
+# Store diagnosis follows the common operational filter.
+# When a season group is selected, prior-year growth is intentionally excluded.
+store_prior_sales = prior_sales.copy()
+if selected_season_group != "전체":
+    store_prior_sales = pd.DataFrame()
+elif not store_prior_sales.empty:
+    prior_style_col = find_col(store_prior_sales, ["스타일코드"])
+    if prior_style_col:
+        store_prior_sales = store_prior_sales[
+            store_prior_sales[prior_style_col]
+            .astype(str)
+            .str.strip()
+            .isin(selected_style_codes)
+        ].copy()
+
 store_diagnosis_df, store_overall_yoy_rate = build_store_diagnosis(
+    analysis_sales,
+    store_prior_sales,
+    analysis_summary,
+    store_perf_summary,
+)
+
+# The season-mix visual remains a full-portfolio comparison so P5 and carryover
+# can still be compared even when the common filter selects one group.
+store_season_full_df, _ = build_store_diagnosis(
     sales,
     prior_sales,
     summary,
-    store_perf_summary,
+    pd.DataFrame(),
 )
 
 
 # Warehouse allocation
 if inv_type_col:
-    warehouse = inventory[
-        inventory[inv_type_col].astype(str).str.contains("창고", na=False)
+    warehouse = analysis_inventory[
+        analysis_inventory[inv_type_col].astype(str).str.contains("창고", na=False)
     ].copy()
 
     if not warehouse.empty:
@@ -1622,7 +1714,7 @@ if inv_type_col:
         wh_stock.columns = ["스타일코드", "창고재고"]
 
         sales_rank = (
-            sales.groupby([sales_style_col, sales_store_col])[sales_qty_col]
+            analysis_sales.groupby([sales_style_col, sales_store_col])[sales_qty_col]
             .sum()
             .reset_index()
         )
@@ -1647,7 +1739,7 @@ if inv_type_col:
 brand_perf = pd.DataFrame()
 if brand_col:
     brand_perf = (
-        diagnosis.groupby(brand_col)
+        filter_df.groupby(brand_col)
         .agg({"판매": "sum", "재고": "sum", style_col: "nunique"})
         .reset_index()
     )
@@ -1662,7 +1754,7 @@ if brand_col:
 cat_perf = pd.DataFrame()
 if category_col:
     cat_perf = (
-        diagnosis.groupby(category_col)
+        filter_df.groupby(category_col)
         .agg({"판매": "sum", "재고": "sum", style_col: "nunique"})
         .reset_index()
     )
@@ -1689,7 +1781,7 @@ def render_kpis() -> None:
             "↗",
             "판매율",
             f"{sell_through:.1f}%",
-            "선택 조건의 누계 판매 기준",
+            f"{analysis_scope_label} · 선택 조건의 누계 판매 기준",
             "#E9F0FF",
         )
 
@@ -1698,7 +1790,7 @@ def render_kpis() -> None:
             "✓",
             "누계 판매수량",
             f"{int(round(total_sales)):,}",
-            "선택 조건의 판매 합계",
+            f"{analysis_scope_label} · 선택 조건의 판매 합계",
             "#ECF8F4",
         )
 
@@ -1707,7 +1799,7 @@ def render_kpis() -> None:
             "□",
             "현재 재고수량",
             f"{int(round(total_stock)):,}",
-            "선택 조건의 재고 합계",
+            f"{analysis_scope_label} · 선택 조건의 재고 합계",
             "#FFF7E8",
         )
 
@@ -1716,7 +1808,7 @@ def render_kpis() -> None:
             "#",
             "분석 상품수",
             f"{len(filter_df):,}",
-            "현재 필터의 분석 대상",
+            f"{analysis_scope_label} · 현재 필터의 분석 대상",
             "#F1ECFF",
         )
 
@@ -1867,7 +1959,7 @@ def render_yoy_page() -> None:
 
     render_yoy_kpis()
     st.markdown(
-        '<div class="small-note">현재 사이드바의 브랜드·카테고리 필터가 전년 비교에도 동일하게 적용됩니다.</div>',
+        '<div class="small-note">브랜드·카테고리 필터는 적용되며, 상품 구분(P5/이월) 필터는 전년 비교에 적용되지 않습니다.</div>',
         unsafe_allow_html=True,
     )
 
@@ -1910,7 +2002,7 @@ def render_insight_cards() -> None:
     st.markdown('<div class="section-label">AI Insight</div>', unsafe_allow_html=True)
 
     # Prior-year data converts the cards from current-state counts into change signals.
-    if yoy_available:
+    if use_yoy_insights:
         brand_rows = _valid_yoy_rows(yoy_brand, "브랜드")
         store_rows = _valid_yoy_rows(yoy_store, "점포명")
 
@@ -2031,7 +2123,7 @@ def render_insight_cards() -> None:
 
 def render_ai_summary_box() -> None:
     """Generate a concise management summary combining YoY and inventory signals."""
-    if not yoy_available:
+    if not use_yoy_insights:
         return
 
     brand_rows = _valid_yoy_rows(yoy_brand, "브랜드")
@@ -2244,6 +2336,11 @@ def render_brand_store_charts() -> None:
 
 def render_store_season_mix() -> None:
     st.markdown('<div class="section-label">점포별 시즌 판매 구성</div>', unsafe_allow_html=True)
+    if selected_season_group != "전체":
+        st.markdown(
+            '<div class="small-note">P5와 이월의 구성 비교를 위해 이 영역은 전체 상품 기준으로 표시됩니다.</div>',
+            unsafe_allow_html=True,
+        )
 
     required_cols = {
         "점포명",
@@ -2254,11 +2351,11 @@ def render_store_season_mix() -> None:
         "이월평균할인율",
         "시즌운영유형",
     }
-    if store_diagnosis_df.empty or not required_cols.issubset(store_diagnosis_df.columns):
+    if store_season_full_df.empty or not required_cols.issubset(store_season_full_df.columns):
         st.info("시즌 판매 구성 분석에 필요한 시즌 데이터를 확인할 수 없습니다.")
         return
 
-    season_view = store_diagnosis_df.copy()
+    season_view = store_season_full_df.copy()
     season_view = season_view[season_view["P5매출"] + season_view["이월매출"] > 0].copy()
     if season_view.empty:
         st.info("P5 및 이월 상품 판매 데이터가 없습니다.")
@@ -2410,12 +2507,20 @@ def render_store_diagnosis() -> None:
             RED,
         )
     with c2:
-        action_card(
-            "성장 둔화·하락",
-            f"{slowdown_count}개",
-            "전체 성장률 대비 1.5%p 이상 낮거나 역성장",
-            AMBER,
-        )
+        if selected_season_group == "전체":
+            action_card(
+                "성장 둔화·하락",
+                f"{slowdown_count}개",
+                "전체 성장률 대비 1.5%p 이상 낮거나 역성장",
+                AMBER,
+            )
+        else:
+            action_card(
+                "선택 상품군 점포",
+                f"{len(store_diagnosis_df)}개",
+                f"{analysis_scope_label} 기준 운영 점포",
+                AMBER,
+            )
     with c3:
         action_card(
             "구성 편중 점포",
@@ -2444,21 +2549,31 @@ def render_store_diagnosis() -> None:
     table_cols = [
         "점포명",
         "점포상태",
-        "매출증감률",
+    ]
+    if selected_season_group == "전체":
+        table_cols.append("매출증감률")
+    table_cols.extend([
         "판매율",
         "브랜드 집중",
         "카테고리 집중",
         "평균할인율",
         "핵심진단",
         "추천조치",
-    ]
+    ])
     view = view[table_cols]
+
+    if selected_season_group == "전체":
+        diagnosis_note = "전체 포트폴리오 기준 · 전년 성장, 구성 편중, 할인율, 재고 회전을 종합 진단"
+        diagnosis_widths = [9, 10, 9, 8, 13, 14, 9, 13, 15]
+    else:
+        diagnosis_note = f"{analysis_scope_label} 기준 · 구성 편중, 할인율, 재고 회전을 종합 진단"
+        diagnosis_widths = [10, 11, 9, 14, 15, 10, 14, 17]
 
     render_html_table(
         view,
         "점포별 AI 진단",
-        "전체 포트폴리오 기준 · 전년 성장, 구성 편중, 할인율, 재고 회전을 종합 진단",
-        [9, 10, 9, 8, 13, 14, 9, 13, 15],
+        diagnosis_note,
+        diagnosis_widths,
     )
 
 
@@ -2609,7 +2724,7 @@ def render_full_table(height: int = 330) -> None:
     render_html_table(
         view,
         "상품 전체 진단",
-        f"총 {len(view):,}개 상품 · GAP에 따라 단일 우선 액션 제시",
+        f"{analysis_scope_label} · 총 {len(view):,}개 상품 · GAP에 따라 단일 우선 액션 제시",
         widths[:len(cols)],
     )
 
@@ -2774,4 +2889,3 @@ elif selected_menu == "AI 액션":
 else:
     render_kpis()
     render_full_table(520)
-
